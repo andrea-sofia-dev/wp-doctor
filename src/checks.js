@@ -88,12 +88,40 @@ export function pageCache({ first, warm, cookie, utm, mobileWarm, consent = { na
     status: problems.length ? 'warn' : 'pass',
     summary: problems.length ? problems.join(' ') : `Repeat visits are served from cache, also ${consent.name ? `after accepting the ${consent.name} banner` : 'with cookies'} and with UTM parameters.`,
     details,
-    fix: problems.length
-      ? isWp
-        ? 'Skip the cache only for logged-in users (WP Super Cache: "known users" is too broad), and tell the cache to ignore utm_*, fbclid, gclid and similar parameters.'
-        : 'Bypass the cache only for session or login cookies, not for consent cookies, and strip utm_*, fbclid, gclid and similar parameters from the cache key.'
-      : undefined,
+    fix: problems.length ? cacheFix(sources, { cookies: problems.some(p => /cookie|banner/i.test(p)), utm: problems.some(p => /utm/i.test(p)), isWp }) : undefined,
   };
+}
+
+// The fix depends on which layer answered: a Cloudflare rule is not fixed in a WordPress plugin.
+const CACHE_FIXES = {
+  Cloudflare: {
+    cookies: 'In the Cloudflare Cache Rule, bypass only on login and cart cookies (wordpress_logged_in_*, woocommerce_*), not on any cookie.',
+    utm: 'In the Cloudflare Cache Rule, set Cache key → Query string to ignore utm_*, fbclid, gclid and similar parameters (or ignore the query string entirely if pages do not use it).',
+  },
+  'WP Super Cache': {
+    cookies: 'WP Super Cache: set "Disable caching for logged in visitors" (wp_cache_not_logged_in = 2); value 1 skips every visitor with a cookie.',
+    utm: 'WP Super Cache: add utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, gclid to "Tracking parameters to ignore".',
+  },
+  'W3 Total Cache': {
+    cookies: 'W3 Total Cache: under Page Cache → Advanced, reject only login/cart cookies, not consent cookies.',
+    utm: 'W3 Total Cache: Page Cache → "Ignored query strings": add utm_*, fbclid, gclid.',
+  },
+  'LiteSpeed Cache': {
+    cookies: 'LiteSpeed Cache: under Cache → Excludes, remove consent cookies from "Do Not Cache Cookies".',
+    utm: 'LiteSpeed Cache: Cache → Advanced → "Drop Query String": add utm*, fbclid, gclid.',
+  },
+  'Kinsta cache': {
+    cookies: 'Kinsta: ask support which cookies bypass the cache and to exclude the consent cookie from that list.',
+    utm: 'Kinsta: ask support to ignore utm_*, fbclid and gclid in the cache key (they can configure it at server level).',
+  },
+};
+
+function cacheFix(sources, { cookies, utm, isWp }) {
+  const layer = sources.find(s => CACHE_FIXES[s]);
+  if (layer) return [cookies && CACHE_FIXES[layer].cookies, utm && CACHE_FIXES[layer].utm].filter(Boolean).join(' ');
+  return isWp
+    ? 'Skip the cache only for logged-in users (WP Super Cache: "known users" is too broad), and tell the cache to ignore utm_*, fbclid, gclid and similar parameters.'
+    : 'Bypass the cache only for session or login cookies, not for consent cookies, and strip utm_*, fbclid, gclid and similar parameters from the cache key.';
 }
 
 export function compression({ warm }) {
@@ -150,20 +178,28 @@ export function lcpHint({ warm }) {
   };
 }
 
+// Consent manager loaders must run before anything else to block cookies until consent:
+// they are blocking by design, and deferring them would break GDPR compliance.
+const CONSENT_LOADERS = /iubenda\.com\/(cs|autoblocking|sync|widgets)\/|consent\.cookiebot\.(com|eu)|cookielaw\.org|otSDKStub|cdn-cookieyes\.com|\/plugins\/complianz-gdpr|\/plugins\/borlabs-cookie\//i;
+
 export function renderBlocking({ warm }) {
   const head = listTags(extractHead(warm.body), ['script', 'link']);
-  const scripts = head.filter(t =>
+  const blocking = head.filter(t =>
     t.name === 'script' && t.attrs.src && !('async' in t.attrs) && !('defer' in t.attrs) &&
     (t.attrs.type || '').toLowerCase() !== 'module');
+  const consent = blocking.filter(t => CONSENT_LOADERS.test(t.attrs.src));
+  const scripts = blocking.filter(t => !CONSENT_LOADERS.test(t.attrs.src));
   const styles = head.filter(t => t.name === 'link' && /stylesheet/i.test(t.attrs.rel || '') && !/print/i.test(t.attrs.media || ''));
   const status = scripts.length > 3 ? 'warn' : 'pass';
+  const details = scripts.slice(0, 8).map(t => `script: ${short(t.attrs.src)}`);
+  if (consent.length) details.push(`consent manager: ${plural(consent.length, 'script')} that must load first (not counted)`);
   return {
     id: 'render-blocking',
     title: 'Render-blocking files',
     status,
-    summary: `${scripts.length} blocking script(s) and ${styles.length} stylesheet(s) in <head>.`,
-    details: scripts.slice(0, 8).map(t => `script: ${short(t.attrs.src)}`),
-    fix: status === 'pass' ? undefined : 'Add defer to scripts that do not need to run before the page paints, or load them only on the pages that use them.',
+    summary: `${plural(scripts.length, 'blocking script')} and ${plural(styles.length, 'stylesheet')} in <head>${consent.length ? `, plus the consent manager, which must block by design` : ''}.`,
+    details,
+    fix: status === 'pass' ? undefined : 'Add defer to scripts that do not need to run before the page paints, or load them only on the pages that use them. Leave the consent manager as it is.',
   };
 }
 
@@ -238,7 +274,7 @@ export function mobileCache({ warm, mobileWarm }) {
         ? 'The page sends "Vary: User-Agent", but computers and phones both got the cache: the CDN seems to normalise it. Other shared caches (proxies, other CDNs) would split it per browser version.'
         : 'The page sends "Vary: User-Agent": shared caches must keep a copy per browser version, so most visits miss.',
       details,
-      fix: 'Remove User-Agent from Vary, or normalise it at the CDN into a few device classes (mobile, tablet, desktop).',
+      fix: normalised ? undefined : 'Remove User-Agent from Vary, or normalise it at the CDN into a few device classes (mobile, tablet, desktop).',
     };
   }
   return {

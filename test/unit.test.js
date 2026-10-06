@@ -76,6 +76,20 @@ test('field test regressions (developer.wordpress.org, wordpress.com, Wikipedia,
   assert.equal(notFound({ notFound: nf, notFoundWarm: nf }).status, 'info');
 });
 
+test('advice follows the cache layer, spares the consent manager, and info results carry no fix', () => {
+  const r = (headers, body = '', t = 100) => res(body, headers, t);
+  const pc = pageCache({ first: r({ 'cf-cache-status': 'HIT' }), warm: r({ 'cf-cache-status': 'HIT' }), cookie: r({ 'cf-cache-status': 'HIT' }), utm: r({ 'cf-cache-status': 'MISS' }, '', 1200) });
+  assert.match(pc.fix, /Cloudflare Cache Rule/);
+  assert.doesNotMatch(pc.fix, /WP Super Cache/);
+  const head = '<head><script src="https://cs.iubenda.com/autoblocking/1.js"></script><script src="https://cdn.iubenda.com/cs/tcf/stub-v2.js"></script>' + '<script src="/a.js"></script>'.repeat(2) + '</head>';
+  const rb = renderBlocking({ warm: r({}, head) });
+  assert.equal(rb.status, 'pass');
+  assert.match(rb.summary, /^2 blocking scripts/);
+  assert.match(rb.details.join(' '), /consent manager: 2 scripts/);
+  const vary = { 'cf-cache-status': 'HIT', vary: 'user-agent' };
+  assert.equal(mobileCache({ warm: r(vary), mobileWarm: r(vary) }).fix, undefined);
+});
+
 test('viewport after a stylesheet is a warning, missing is a failure', () => {
   const late = '<head><link rel="stylesheet" href="a.css"><meta name="viewport" content="width=device-width"></head>';
   const early = '<head><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="a.css"></head>';

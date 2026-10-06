@@ -92,7 +92,8 @@ export const EXPLANATIONS = {
     fixes: [
       'WordPress 6.3+: wp_enqueue_script(..., [ "strategy" => "defer", "in_footer" => true ]) or the script_loader_tag filter for third-party plugins.',
       'Load plugin scripts only on pages that use the plugin (check for the shortcode or block before enqueuing).',
-      'Keep scripts that must run early (consent manager, critical inline config) small and inline.',
+      'Never defer the consent manager (iubenda, Cookiebot, OneTrust, Complianz…): it must run first to block cookies until consent. wp-doctor does not count it.',
+      'Keep other scripts that must run early (critical inline config) small and inline.',
     ],
   },
   recaptcha: {
