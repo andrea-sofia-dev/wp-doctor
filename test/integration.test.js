@@ -19,6 +19,7 @@ let base;
 const seenCookies = [];
 let strictMode = false;
 let blockedHits = 0;
+let pdfHits = 0;
 
 before(async () => {
   server = http.createServer((req, res) => {
@@ -28,6 +29,20 @@ before(async () => {
     if (req.headers.cookie) seenCookies.push(req.headers.cookie);
     res.setHeader('content-type', 'text/html; charset=utf-8');
 
+    if (url.pathname === '/loop') {
+      res.statusCode = 302;
+      res.setHeader('location', '/loop');
+      return res.end();
+    }
+    if (url.pathname === '/file.pdf') {
+      pdfHits++;
+      res.setHeader('content-type', 'application/pdf');
+      return res.end('%PDF-1.4');
+    }
+    if (url.pathname === '/big') {
+      res.setHeader('cf-cache-status', 'HIT');
+      return res.end(page('').replace('<h1>Hello</h1>', '<p>' + 'x'.repeat(5 * 1024 * 1024) + '</p>'));
+    }
     if (url.pathname === '/blocked') {
       blockedHits++;
       res.statusCode = 403;
@@ -96,4 +111,16 @@ test('a site that blocks the first requests gets no more requests', async () => 
   assert.equal(data.blocked, true);
   assert.equal(blockedHits, 2);
   assert.equal(runChecks(data)[0].id, 'reachability');
+});
+
+test('extreme cases: redirect loop, a PDF, a 5 MB page', async () => {
+  await assert.rejects(collect(`${base}/loop`, { pages: 0 }), err => /redirect/i.test(err.cause?.message || err.message));
+  const pdf = await collect(`${base}/file.pdf`, { pages: 0 });
+  assert.equal(pdf.blocked, true);
+  assert.equal(pdfHits, 2, 'stops after two requests');
+  assert.match(runChecks(pdf)[0].summary, /not a web page \(application\/pdf\)/);
+  const started = Date.now();
+  const big = runChecks(await collect(`${base}/big`, { pages: 0 }));
+  assert.ok(big.length > 5);
+  assert.ok(Date.now() - started < 15000, 'a 5 MB page is analysed in reasonable time');
 });

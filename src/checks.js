@@ -22,7 +22,16 @@ export function serverResponse({ first, warm }) {
   };
 }
 
-export function pageCache({ first, warm, cookie, utm, mobileWarm, consent = { name: null }, isWp = true }) {
+function queryWithoutCampaign(address) {
+  try {
+    const params = [...new URL(address).searchParams.keys()].filter(k => !/^(utm_|fbclid|gclid|msclkid|ttclid)/i.test(k));
+    return params.length ? params.join('&') : '';
+  } catch {
+    return '';
+  }
+}
+
+export function pageCache({ url, first, warm, cookie, utm, mobileWarm, consent = { name: null }, isWp = true }) {
   const w = cacheVerdict(warm);
   const c = cacheVerdict(cookie);
   const u = cacheVerdict(utm);
@@ -40,8 +49,17 @@ export function pageCache({ first, warm, cookie, utm, mobileWarm, consent = { na
     // A cache that served any of the other visits exists: this miss is about this request, not the site.
     const servedElsewhere = [c, mobileWarm ? cacheVerdict(mobileWarm) : null].some(v => v?.hit === true);
     const layer = sources[0] || 'a cache';
+    // Search and filter pages (?s=, ?filter=) are usually kept out of the cache on purpose.
+    const query = queryWithoutCampaign(url || warm.url);
     let status;
     let summary;
+    if (query && w.hit === false) {
+      return {
+        id: 'page-cache', title: 'Page cache', status: 'info',
+        summary: `This address has a query string (?${query}): search and filter pages are usually kept out of the cache on purpose. Check a normal page to judge the cache.`,
+        details,
+      };
+    }
     if (servedElsewhere) {
       status = 'warn';
       summary = `A cache (${layer}) is in place and served other visits, but missed the repeat visit. Popular caches often store a page only after several requests: run again to see if it settles.`;
@@ -371,6 +389,17 @@ const CHALLENGE = /<title>\s*(Just a moment|Attention Required|Access denied|Req
 
 // If the site refused the request, the other checks would describe an error page, not the site.
 export function reachability({ first, warm }) {
+  // A PDF, an image or a JSON endpoint is not a page: the checks would describe nothing useful.
+  const type = (first.headers['content-type'] || '').toLowerCase();
+  if (first.status < 400 && type && !/html|xml/.test(type)) {
+    return {
+      id: 'reachability',
+      title: 'Web page',
+      status: 'fail',
+      summary: `This address is not a web page (${type.split(';')[0]}). Pass the address of a page of the site instead.`,
+      details: [],
+    };
+  }
   const res = warm.status >= 400 ? warm : first;
   // Challenges that answer 2xx: AWS WAF (202 + x-amzn-waf-action), Cloudflare (cf-mitigated), or the challenge page itself.
   const challenged = r => CHALLENGE.test(r.body) || Boolean(r.headers['x-amzn-waf-action']) || /challenge/i.test(r.headers['cf-mitigated'] || '') ||

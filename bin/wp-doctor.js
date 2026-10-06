@@ -71,11 +71,17 @@ try {
 }
 
 function describeError(err) {
-  const code = err.cause?.code;
+  // Node puts the network error code on err.cause, or one level deeper when several addresses were tried.
+  const code = err.cause?.code || err.cause?.errors?.[0]?.code || err.cause?.cause?.code;
   if (err.name === 'TimeoutError') return 'the site did not answer within 20 seconds (it may be down, very slow, or silently dropping automated requests)';
-  if (code === 'ENOTFOUND') return 'the domain does not exist (check the address)';
+  if (/redirect count exceeded/i.test(err.cause?.message || err.message)) return 'the site redirects in a loop (too many redirects)';
+  if (code === 'ENOTFOUND') {
+    return /^https?:\/\/[^./]+\/?$/i.test(url) ? 'that is not a web address: write the full domain, e.g. example.com' : 'the domain does not exist (check the address)';
+  }
   if (code === 'ECONNREFUSED') return 'the server refused the connection';
   if (code === 'ECONNRESET') return 'the server closed the connection';
   if (/CERT|SSL|TLS/i.test(code || '')) return `the HTTPS certificate is not valid (${code})`;
-  return code || err.message;
+  if (/bad port/i.test(err.cause?.message || '')) return 'that port is not allowed for web requests';
+  // "fetch failed" says nothing: the inner message usually does.
+  return code || err.cause?.message || err.message;
 }
