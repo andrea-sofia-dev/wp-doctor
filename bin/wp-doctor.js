@@ -63,6 +63,19 @@ try {
   if (data.blocked) process.exit(2); // the site could not be checked
   process.exit(results.some(r => r.status === 'fail') ? 1 : 0);
 } catch (err) {
-  console.error(`wp-doctor: could not check ${url}: ${err.cause?.code || err.message}`);
+  const reason = describeError(err);
+  // With --json, automation still gets a JSON answer on stdout.
+  if (asJson) console.log(JSON.stringify({ url, error: reason }, null, 2));
+  console.error(`wp-doctor: could not check ${url}: ${reason}`);
   process.exit(2);
+}
+
+function describeError(err) {
+  const code = err.cause?.code;
+  if (err.name === 'TimeoutError') return 'the site did not answer within 20 seconds (it may be down, very slow, or silently dropping automated requests)';
+  if (code === 'ENOTFOUND') return 'the domain does not exist (check the address)';
+  if (code === 'ECONNREFUSED') return 'the server refused the connection';
+  if (code === 'ECONNRESET') return 'the server closed the connection';
+  if (/CERT|SSL|TLS/i.test(code || '')) return `the HTTPS certificate is not valid (${code})`;
+  return code || err.message;
 }

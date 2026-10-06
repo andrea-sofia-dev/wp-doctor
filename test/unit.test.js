@@ -90,6 +90,15 @@ test('advice follows the cache layer, spares the consent manager, and info resul
   assert.equal(mobileCache({ warm: r(vary), mobileWarm: r(vary) }).fix, undefined);
 });
 
+test('second field test: AWS WAF challenge, Borlabs config script', () => {
+  const aws = { status: 202, headers: { 'x-amzn-waf-action': 'challenge', 'x-cache': 'Error from cloudfront' }, body: '<script>window.awsWafCookieDomainList = []</script>', ttfbMs: 50 };
+  const results = runChecks({ first: aws, warm: aws, pages: [] });
+  assert.equal(results[0].id, 'reachability');
+  assert.match(results[0].summary, /blocks automated requests/);
+  const head = '<head><script src="/wp-content/cache/borlabs-cookie/1/borlabs-cookie-config-en.json.js"></script></head>';
+  assert.match(renderBlocking({ warm: res(head) }).summary, /^0 blocking scripts/);
+});
+
 test('viewport after a stylesheet is a warning, missing is a failure', () => {
   const late = '<head><link rel="stylesheet" href="a.css"><meta name="viewport" content="width=device-width"></head>';
   const early = '<head><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="a.css"></head>';

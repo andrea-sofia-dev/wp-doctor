@@ -180,7 +180,7 @@ export function lcpHint({ warm }) {
 
 // Consent manager loaders must run before anything else to block cookies until consent:
 // they are blocking by design, and deferring them would break GDPR compliance.
-const CONSENT_LOADERS = /iubenda\.com\/(cs|autoblocking|sync|widgets)\/|consent\.cookiebot\.(com|eu)|cookielaw\.org|otSDKStub|cdn-cookieyes\.com|\/plugins\/complianz-gdpr|\/plugins\/borlabs-cookie\//i;
+const CONSENT_LOADERS = /iubenda\.com\/(cs|autoblocking|sync|widgets)\/|consent\.cookiebot\.(com|eu)|cookielaw\.org|otSDKStub|cdn-cookieyes\.com|\/plugins\/complianz-gdpr|\/borlabs-cookie\//i;
 
 export function renderBlocking({ warm }) {
   const head = listTags(extractHead(warm.body), ['script', 'link']);
@@ -285,9 +285,9 @@ export function mobileCache({ warm, mobileWarm }) {
   };
 }
 
-export function sitePages({ pages = [] }) {
+export function sitePages({ pages = [], isWp = true }) {
   if (pages.length === 0) {
-    return { id: 'site-pages', title: 'Other pages', status: 'info', summary: 'No sitemap found, so only the start page was checked.', details: [], fix: 'Pass a specific page URL to check it, or enable the WordPress sitemap.' };
+    return { id: 'site-pages', title: 'Other pages', status: 'info', summary: 'No sitemap found, so only the start page was checked.', details: [], fix: isWp ? 'Pass a specific page URL to check it, or enable the WordPress sitemap.' : 'Pass a specific page URL to check it, or publish a sitemap.xml and list it in robots.txt.' };
   }
   const rows = pages.map(p => ({ path: short(p.url), v: cacheVerdict(p.warm), t: p.warm.ttfbMs }));
   const slowest = Math.max(...rows.map(r => r.t));
@@ -372,7 +372,10 @@ const CHALLENGE = /<title>\s*(Just a moment|Attention Required|Access denied|Req
 // If the site refused the request, the other checks would describe an error page, not the site.
 export function reachability({ first, warm }) {
   const res = warm.status >= 400 ? warm : first;
-  const blockedPage = CHALLENGE.test(first.body) || CHALLENGE.test(warm.body);
+  // Challenges that answer 2xx: AWS WAF (202 + x-amzn-waf-action), Cloudflare (cf-mitigated), or the challenge page itself.
+  const challenged = r => CHALLENGE.test(r.body) || Boolean(r.headers['x-amzn-waf-action']) || /challenge/i.test(r.headers['cf-mitigated'] || '') ||
+    /awsWafCookieDomainList|AwsWafIntegration/.test(r.body);
+  const blockedPage = challenged(first) || challenged(warm);
   if (res.status < 400 && !blockedPage) return null;
   const via = res.headers['x-cache']?.match(/error from (\w+)/i)?.[1] || res.headers.server || res.headers['cf-ray'] && 'cloudflare';
   const why = res.status === 403 || blockedPage
