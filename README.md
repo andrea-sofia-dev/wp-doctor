@@ -6,8 +6,9 @@ PageSpeed Insights tests a clean visit: no cookies, no campaign parameters. Real
 have accepted a cookie banner, and every ad or newsletter click carries `utm_*` parameters. On many WordPress sites
 those visitors skip the page cache and get the slow page, while PageSpeed shows you a fast one.
 
-wp-doctor checks a public WordPress site from the outside, the way those visitors reach it, in a few seconds and
-without installing anything on the site. Use it as a command-line tool, or as an MCP server that lets an AI agent
+wp-doctor checks a public site from the outside, the way those visitors reach it, in a few seconds and without
+installing anything on the site. It works on any site; on WordPress it does more (plugin files, cache plugins,
+WordPress-specific fixes). Use it as a command-line tool, or as an MCP server that lets an AI agent
 run the checks and propose fixes for your stack.
 
 Example output:
@@ -65,8 +66,11 @@ still slow. The full story is in [this case study](https://github.com/andrea-sof
 | reCAPTCHA | reCAPTCHA loaded on pages with no form, or before anyone touches the form |
 | Plugin files | How many CSS/JS files each plugin adds to the page |
 
-Cache detection understands Cloudflare, LiteSpeed, nginx/FastCGI caches, WP Super Cache, W3 Total Cache, WP Rocket
-and the `Age` header. When a site gives no signal, wp-doctor says so instead of guessing.
+Cache detection understands Cloudflare, Fastly, CloudFront, Akamai, Vercel, Netlify and the standard `Cache-Status`
+header, Varnish, nginx/FastCGI, LiteSpeed, Sucuri, managed WordPress hosts (WordPress VIP, Kinsta, WP Engine,
+Hostinger), WP Super Cache, W3 Total Cache, WP Rocket and the `Age` header. When a site gives no signal, wp-doctor says
+so instead of guessing. If a site blocks automated requests, wp-doctor stops after two requests and says so, instead
+of analysing the error page.
 
 ## Usage
 

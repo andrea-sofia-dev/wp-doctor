@@ -1,7 +1,7 @@
 // Timed HTTP requests. Node's fetch resolves when the response headers arrive,
 // so the time to that point is a fair approximation of TTFB.
 
-export const USER_AGENT = 'wp-doctor/1.0 (+https://github.com/andrea-sofia-dev/wp-doctor)';
+export const USER_AGENT = 'wp-doctor/1.1 (+https://github.com/andrea-sofia-dev/wp-doctor)';
 
 export async function timedFetch(url, { headers = {}, timeoutMs = 20000 } = {}) {
   const start = performance.now();

@@ -1,5 +1,6 @@
 import { cacheVerdict } from './cache.js';
 import { extractHead, listTags, pluginAssets } from './html.js';
+import { plural } from './report.js';
 
 // Every check takes the collected responses and returns
 // { id, title, status: 'pass' | 'warn' | 'fail' | 'info', summary, details: [], fix? }.
@@ -21,7 +22,7 @@ export function serverResponse({ first, warm }) {
   };
 }
 
-export function pageCache({ first, warm, cookie, utm, consent = { name: null } }) {
+export function pageCache({ first, warm, cookie, utm, mobileWarm, consent = { name: null }, isWp = true }) {
   const w = cacheVerdict(warm);
   const c = cacheVerdict(cookie);
   const u = cacheVerdict(utm);
@@ -36,19 +37,39 @@ export function pageCache({ first, warm, cookie, utm, consent = { name: null } }
   if (w.hit !== true) {
     // Same "good" threshold as the server response check, so the two never contradict each other.
     const fast = warm.ttfbMs <= 800;
+    // A cache that served any of the other visits exists: this miss is about this request, not the site.
+    const servedElsewhere = [c, mobileWarm ? cacheVerdict(mobileWarm) : null].some(v => v?.hit === true);
+    const layer = sources[0] || 'a cache';
+    let status;
+    let summary;
+    if (servedElsewhere) {
+      status = 'warn';
+      summary = `A cache (${layer}) is in place and served other visits, but missed the repeat visit. Popular caches often store a page only after several requests: run again to see if it settles.`;
+    } else if (w.bypass) {
+      status = 'warn';
+      summary = `A cache (${layer}) is in place but skips this page (BYPASS): every visit is generated from scratch.`;
+    } else if (w.hit === false) {
+      status = 'fail';
+      summary = `Repeat visits are generated from scratch: the cache (${layer}) does not store this page.`;
+    } else {
+      status = fast ? 'info' : 'warn';
+      summary = fast
+        ? `No HIT or MISS signal${sources.length ? ` (${sources.join(', ')} present, without saying whether it served the page)` : ''}, but repeat visits are fast: a cache may be in place without announcing itself.`
+        : 'No sign of a page cache, and the page is not fast.';
+    }
     return {
       id: 'page-cache',
       title: 'Page cache',
-      status: w.hit === false ? 'fail' : fast ? 'info' : 'warn',
-      summary: w.hit === false
-        ? 'Repeat visits are generated from scratch: no page cache is serving this page.'
-        : fast
-          ? 'No cache headers, but repeat visits are fast: a cache may be in place without announcing itself.'
-          : 'No sign of a page cache, and the page is not fast.',
+      status,
+      summary,
       details,
-      fix: w.hit === null && fast
+      fix: status === 'info' || servedElsewhere
         ? undefined
-        : 'Turn on a page cache (WP Super Cache, W3 Total Cache, LiteSpeed Cache, or a CDN rule that caches HTML).',
+        : w.bypass
+          ? 'Find the rule that bypasses the cache for this page (a cookie, a query string, a "no-cache" header from a plugin or the application) and narrow it.'
+          : isWp
+            ? 'Turn on a page cache (WP Super Cache, W3 Total Cache, LiteSpeed Cache, or a CDN rule that caches HTML).'
+            : 'Cache the HTML for anonymous visitors: a CDN rule (Cloudflare, Fastly, CloudFront), a reverse proxy (Varnish, nginx) or the framework\'s own page cache.',
     };
   }
 
@@ -68,7 +89,9 @@ export function pageCache({ first, warm, cookie, utm, consent = { name: null } }
     summary: problems.length ? problems.join(' ') : `Repeat visits are served from cache, also ${consent.name ? `after accepting the ${consent.name} banner` : 'with cookies'} and with UTM parameters.`,
     details,
     fix: problems.length
-      ? 'Skip the cache only for logged-in users (WP Super Cache: "known users" is too broad), and tell the cache to ignore utm_*, fbclid, gclid and similar parameters.'
+      ? isWp
+        ? 'Skip the cache only for logged-in users (WP Super Cache: "known users" is too broad), and tell the cache to ignore utm_*, fbclid, gclid and similar parameters.'
+        : 'Bypass the cache only for session or login cookies, not for consent cookies, and strip utm_*, fbclid, gclid and similar parameters from the cache key.'
       : undefined,
   };
 }
@@ -170,7 +193,8 @@ export function recaptcha({ warm }) {
   };
 }
 
-export function plugins({ warm }) {
+export function plugins({ warm, isWp = true }) {
+  if (!isWp) return null; // WordPress only
   const bySlug = pluginAssets(warm.body);
   const entries = Object.entries(bySlug).sort((a, b) => b[1].length - a[1].length);
   const total = entries.reduce((n, [, files]) => n + files.length, 0);
@@ -206,9 +230,13 @@ export function mobileCache({ warm, mobileWarm }) {
     };
   }
   if (varyUa) {
+    // If both a computer and a phone still got a HIT, the CDN normalises the User-Agent: worth knowing, not a problem.
+    const normalised = d.hit === true && m.hit === true;
     return {
-      id: 'mobile-cache', title: 'Cache on phones', status: 'warn',
-      summary: 'The page sends "Vary: User-Agent": shared caches must keep a copy per browser version, so most visits miss.',
+      id: 'mobile-cache', title: 'Cache on phones', status: normalised ? 'info' : 'warn',
+      summary: normalised
+        ? 'The page sends "Vary: User-Agent", but computers and phones both got the cache: the CDN seems to normalise it. Other shared caches (proxies, other CDNs) would split it per browser version.'
+        : 'The page sends "Vary: User-Agent": shared caches must keep a copy per browser version, so most visits miss.',
       details,
       fix: 'Remove User-Agent from Vary, or normalise it at the CDN into a few device classes (mobile, tablet, desktop).',
     };
@@ -236,7 +264,7 @@ export function sitePages({ pages = [] }) {
   const status = slowUncached.length ? 'fail' : misses.length || slow.length ? 'warn' : 'pass';
 
   const parts = [];
-  if (misses.length) parts.push(`${misses.length} of ${pages.length} pages from the sitemap miss the cache.`);
+  if (misses.length) parts.push(`${misses.length} of ${plural(pages.length, 'page')} from the sitemap ${misses.length === 1 ? 'misses' : 'miss'} the cache.`);
   if (slowUncached.length) parts.push(`${slowUncached.length} take more than 1.8 s on a repeat visit (slowest ${ms(slowest)}).`);
   else if (slowHits.length) parts.push(`${slowHits.length} came from the cache but still took up to ${ms(slowest)}: the server or the network was slow at that moment. Re-run to confirm.`);
   else if (slow.length) parts.push(`The slowest takes ${ms(slowest)} on a repeat visit.`);
@@ -245,7 +273,7 @@ export function sitePages({ pages = [] }) {
     id: 'site-pages',
     title: 'Other pages',
     status,
-    summary: status === 'pass' ? `${pages.length} pages from the sitemap are fast on a repeat visit (slowest ${ms(slowest)}).` : parts.join(' '),
+    summary: status === 'pass' ? `${plural(pages.length, 'page')} from the sitemap ${pages.length === 1 ? 'is' : 'are'} fast on a repeat visit (slowest ${ms(slowest)}).` : parts.join(' '),
     details: rows.map(r => `${r.path}: ${label(r.v.hit)} (${ms(r.t)})`),
     fix: misses.length || slowUncached.length
       ? 'Look for cache exclusions that are too broad (whole post types, pages with a form or a shortcode) and for pages that are slow to generate.'
@@ -259,6 +287,14 @@ export function notFound({ notFound: nf, notFoundWarm }) {
   const landed = short(nf.url);
   if (nf.status === 200) {
     const redirected = Boolean(nf.requestedUrl) && landed !== requested;
+    // Apps often send unknown URLs to the login page (the path could be an account name): expected, not a soft 404.
+    if (redirected && /\b(log-?in|sign-?in|auth|sso|account)\b/i.test(landed)) {
+      return {
+        id: 'not-found', title: 'Missing pages (404)', status: 'info',
+        summary: `Unknown URLs redirect to the login page (${landed}), as web apps usually do. If this is a content site, missing pages should return 404 instead.`,
+        details: [`requested ${requested} → ${nf.status} at ${landed}`],
+      };
+    }
     return {
       id: 'not-found', title: 'Missing pages (404)', status: 'fail',
       summary: redirected
@@ -319,7 +355,8 @@ export function reachability({ first, warm }) {
 export function runChecks(data) {
   const blocked = reachability(data);
   if (blocked) return [blocked];
-  return ALL_CHECKS.map(check => check(data));
+  // Checks that do not apply to this site (e.g. plugin files on a non-WordPress site) return null.
+  return ALL_CHECKS.map(check => check(data)).filter(Boolean);
 }
 
 function label(hit) {

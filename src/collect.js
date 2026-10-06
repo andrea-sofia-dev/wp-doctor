@@ -3,6 +3,7 @@ import { consentCookie } from './consent.js';
 import { samplePages } from './sitemap.js';
 import { wordpressBase } from './wpbase.js';
 import { reachability } from './checks.js';
+import { isWordPress } from './html.js';
 
 export const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 wp-doctor';
@@ -46,7 +47,8 @@ export async function collect(url, { timeoutMs, pages = 3 } = {}) {
     if (p1 && p2) pageResults.push({ url: pageUrl, first: p1, warm: p2 });
   }
 
-  return { url: target, first, warm, cookie, consent, utm, mobileFirst, mobileWarm, notFound, notFoundWarm, pages: pageResults };
+  const isWp = isWordPress(first.body, first.headers) || isWordPress(warm.body, warm.headers);
+  return { url: target, isWp, first, warm, cookie, consent, utm, mobileFirst, mobileWarm, notFound, notFoundWarm, pages: pageResults };
 }
 
 // Secondary requests must never sink the whole audit.

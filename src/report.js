@@ -5,7 +5,7 @@ export function textReport(url, results, { color = false, isWp = true } = {}) {
   const paint = (status, s) => (color ? `\x1b[${COLOR[status]}m${s}\x1b[0m` : s);
   const dim = s => (color ? `\x1b[2m${s}\x1b[0m` : s);
   const lines = [`wp-doctor · ${url}`, ''];
-  if (!isWp) lines.push(paint('info', 'Note: this does not look like a WordPress site. The checks still apply to any page.'), '');
+  if (!isWp) lines.push(paint('info', 'Not a WordPress site: general checks only (the WordPress-specific ones are skipped).'), '');
 
   for (const r of results) {
     lines.push(`${paint(r.status, SYMBOL[r.status])} ${r.title}: ${r.summary}`);
