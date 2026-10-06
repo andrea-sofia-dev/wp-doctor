@@ -1,18 +1,53 @@
 import { timedFetch, withParams } from './http.js';
+import { consentCookie } from './consent.js';
+import { samplePages } from './sitemap.js';
+
+export const MOBILE_UA =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 wp-doctor';
 
 // One set of requests shared by every check, so each check stays a pure function.
-// - first: whatever the cache holds right now (may be cold)
-// - warm: the same URL again, which a working page cache should serve
-// - cookie: a harmless cookie, like the one a consent banner sets on almost every visitor
-// - utm: campaign parameters, like every visit from an ad or a newsletter
-export async function collect(url, { timeoutMs } = {}) {
+// All requests are plain GETs, sent one after the other to stay polite.
+// - first / warm: the URL twice; a working page cache serves the second
+// - cookie: the consent cookie of the site's own banner (almost every real visitor has it)
+// - utm: campaign parameters with a fresh value, like every ad or newsletter click
+// - mobileFirst / mobileWarm: the same visit from a phone
+// - notFound / notFoundWarm: a page that cannot exist, twice
+// - pages: a few other pages from the sitemap, twice each
+export async function collect(url, { timeoutMs, pages = 3 } = {}) {
   const opts = { timeoutMs };
   const first = await timedFetch(url, opts);
   const target = first.url;
   const warm = await timedFetch(target, opts);
-  const cookie = await timedFetch(target, { ...opts, headers: { cookie: 'wp_doctor_consent=1' } });
-  // A fresh value every run: if the cache keys on campaign parameters, this request cannot be a hit.
+
+  const consent = consentCookie(first.body);
+  const cookie = await timedFetch(target, { ...opts, headers: { cookie: consent.cookie } });
+
   const campaign = `audit-${Date.now().toString(36)}`;
   const utm = await timedFetch(withParams(target, { utm_source: 'wp-doctor', utm_campaign: campaign }), opts);
-  return { url: target, first, warm, cookie, utm };
+
+  const mobileHeaders = { 'user-agent': MOBILE_UA };
+  const mobileFirst = await timedFetch(target, { ...opts, headers: mobileHeaders });
+  const mobileWarm = await timedFetch(target, { ...opts, headers: mobileHeaders });
+
+  const missing = new URL(`/wp-doctor-missing-${campaign}/`, target).toString();
+  const notFound = await safeFetch(missing, opts);
+  const notFoundWarm = notFound ? await safeFetch(missing, opts) : null;
+
+  const pageResults = [];
+  for (const pageUrl of await samplePages(target, pages, opts)) {
+    const p1 = await safeFetch(pageUrl, opts);
+    const p2 = p1 ? await safeFetch(pageUrl, opts) : null;
+    if (p1 && p2) pageResults.push({ url: pageUrl, first: p1, warm: p2 });
+  }
+
+  return { url: target, first, warm, cookie, consent, utm, mobileFirst, mobileWarm, notFound, notFoundWarm, pages: pageResults };
+}
+
+// Secondary requests must never sink the whole audit.
+async function safeFetch(url, opts) {
+  try {
+    return await timedFetch(url, opts);
+  } catch {
+    return null;
+  }
 }

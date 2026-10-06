@@ -15,14 +15,15 @@ const TOOLS = [
     name: 'check_site',
     title: 'Check a WordPress site',
     description:
-      'Audit a public WordPress site from the outside (four ordinary GET requests): server response time, page cache ' +
-      '(also for visitors with cookies and with UTM parameters), compression, viewport tag position, main image priority, ' +
-      'render-blocking files, reCAPTCHA and plugin files. Returns a readable report and the results as JSON. ' +
+      'Audit a public WordPress site from the outside, the way real visitors reach it (ordinary GET requests): page cache ' +
+      'after accepting the cookie banner, with UTM parameters and on phones, a few pages from the sitemap, missing pages (404), ' +
+      'server response time, compression, viewport tag position, main image priority, render-blocking files, reCAPTCHA and plugin files. Returns a readable report and the results as JSON. ' +
       'Use explain_check on any warning or failure to get concrete fixes. Only check sites the user owns or may test.',
     inputSchema: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'Page to check, e.g. https://example.com/ (https:// is added if missing)' },
+        pages: { type: 'integer', minimum: 0, maximum: 20, description: 'How many other pages from the sitemap to check as well (default 3)' },
       },
       required: ['url'],
     },
@@ -101,7 +102,8 @@ async function callTool(name, args, check) {
     let url = args.url.trim();
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
     try {
-      const { finalUrl, results, isWp } = await check(url);
+      const pages = Number.isInteger(args.pages) ? Math.max(0, Math.min(20, args.pages)) : 3;
+      const { finalUrl, results, isWp } = await check(url, { pages });
       const report = textReport(finalUrl, results, { color: false, isWp });
       const json = JSON.stringify({ url: finalUrl, wordpress: isWp, results }, null, 2);
       return {
@@ -118,8 +120,8 @@ async function callTool(name, args, check) {
   throw Object.assign(new Error(`Unknown tool: ${name}`), { code: -32602 });
 }
 
-async function defaultCheck(url) {
-  const data = await collect(url);
+async function defaultCheck(url, { pages = 3 } = {}) {
+  const data = await collect(url, { pages });
   return { finalUrl: data.url, results: runChecks(data), isWp: isWordPress(data.warm.body, data.warm.headers) };
 }
 

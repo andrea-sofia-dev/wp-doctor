@@ -25,6 +25,36 @@ export const EXPLANATIONS = {
       'nginx fastcgi_cache: strip campaign parameters from the cache key and bypass only on WordPress login/cart cookies, not on any cookie.',
     ],
   },
+  'mobile-cache': {
+    title: 'Cache on phones',
+    why: 'Many setups keep separate cached copies for phones and computers. If the phone copy is never stored, or the CDN purges only one of them, phones (usually most of the traffic) get slow or stale pages.',
+    verify: 'Request the page twice with a mobile User-Agent and compare cache headers with a desktop request. On Cloudflare with device caching, purge by URL once per CF-Device-Type (desktop, mobile, tablet).',
+    fixes: [
+      'WP Super Cache: if "Mobile device support" is on, check that mobile files are created; otherwise turn it off and serve one responsive page.',
+      'Cloudflare: when a Cache Rule varies by device type, purge each URL for desktop, mobile and tablet, or the phone keeps the old page.',
+      'Remove "Vary: User-Agent" sent by a plugin or the server; if device variants are needed, normalise the User-Agent into a few classes at the CDN.',
+    ],
+  },
+  'site-pages': {
+    title: 'Other pages',
+    why: 'The home page is often the best-cached page. Posts, landing pages or pages with forms may be excluded from the cache by broad rules and be the ones visitors actually land on from search and ads.',
+    verify: 'Pick a few URLs from the sitemap and request each twice, checking cache headers and time to first byte.',
+    fixes: [
+      'Review cache exclusions: exclude single URLs that really need it (cart, checkout, pages with short-lived tokens), not whole post types or every page with a form.',
+      'For pages that must stay dynamic, cache the page and load the dynamic part (form tokens, personalised content) with a small AJAX request.',
+      'If a specific page is slow even on a cache hit, it is heavy to render in the browser: check it with Lighthouse.',
+    ],
+  },
+  'not-found': {
+    title: 'Missing pages (404)',
+    why: 'A missing page must answer 404. A "soft 404" (status 200, often a redirect to the home page) gets indexed by search engines and cached as a real page. A 404 cached for hours means a page published later at a URL someone already tried keeps showing "not found".',
+    verify: 'curl -s -o /dev/null -w "%{http_code}\\n" https://example.com/this-page-does-not-exist/ (twice, checking cache headers on the second).',
+    fixes: [
+      'Soft 404: find the redirect plugin rule or theme template that catches missing URLs and sends them to the home page; let WordPress return 404.',
+      'W3 Total Cache: do not cache 404 pages (Page Cache → "Cache 404 (not found) pages" off), or keep the lifetime short.',
+      'Cloudflare: Cache Rule with a status-code TTL so 404 responses are kept for a few minutes at most; purge the URL when a page is published.',
+    ],
+  },
   compression: {
     title: 'Compression',
     why: 'HTML, CSS and JS compress by 70–85%. Uncompressed HTML is wasted transfer time on every page view, worst on mobile networks.',

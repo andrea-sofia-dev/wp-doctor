@@ -7,17 +7,18 @@ import { isWordPress } from '../src/html.js';
 import { textReport, jsonReport } from '../src/report.js';
 import { htmlReport, defaultReportName } from '../src/html-report.js';
 
-const HELP = `Usage: wp-doctor <url> [--json] [--html[=file]]
+const HELP = `Usage: wp-doctor <url> [--json] [--html[=file]] [--pages=N]
 
-Checks a WordPress site from the outside: server response time, page cache
-(also for visitors with cookies or UTM parameters), compression, the position
-of the viewport tag, main image priority, render-blocking files, reCAPTCHA and
-plugin files.
+Checks a WordPress site from the outside, the way real visitors reach it: page cache
+after accepting the cookie banner, with UTM parameters and on phones, other pages
+from the sitemap, missing pages (404), server response time, compression, viewport
+tag position, main image priority, render-blocking files, reCAPTCHA, plugin files.
 
 Options:
   --json         print the results as JSON
   --html         also save a self-contained HTML report (wp-doctor-<site>-<date>.html)
   --html=file    save the HTML report with that name
+  --pages=N      also check N pages from the sitemap (default 3, 0 to skip)
   --help         show this help
   --version      show the version
 
@@ -44,7 +45,9 @@ if (!url) {
 if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 
 try {
-  const data = await collect(url);
+  const pagesArg = args.find(a => a.startsWith('--pages='));
+  const pages = pagesArg ? Math.max(0, Math.min(20, Number(pagesArg.slice(8)) || 0)) : 3;
+  const data = await collect(url, { pages });
   const results = runChecks(data);
   const isWp = isWordPress(data.warm.body, data.warm.headers);
   const color = process.stdout.isTTY && !process.env.NO_COLOR;

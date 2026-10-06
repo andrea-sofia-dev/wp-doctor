@@ -2,7 +2,8 @@
 // hit: true (served from cache), false (generated or missed), null (no evidence either way).
 
 const HEADER_RULES = [
-  { header: 'cf-cache-status', source: 'Cloudflare', hit: v => /^(HIT|STALE|REVALIDATED|UPDATING)$/i.test(v), miss: v => /^(MISS|EXPIRED|BYPASS|DYNAMIC)$/i.test(v) },
+  // DYNAMIC only means Cloudflare does not cache HTML for this URL: a cache on the server may still answer, so it is not a miss.
+  { header: 'cf-cache-status', source: 'Cloudflare', hit: v => /^(HIT|STALE|REVALIDATED|UPDATING)$/i.test(v), miss: v => /^(MISS|EXPIRED|BYPASS)$/i.test(v) },
   { header: 'x-litespeed-cache', source: 'LiteSpeed Cache', hit: v => /^hit/i.test(v), miss: v => /^miss/i.test(v) },
   { header: 'x-proxy-cache', source: 'Nginx proxy cache', hit: v => /HIT/i.test(v), miss: v => /MISS|BYPASS|EXPIRED/i.test(v) },
   { header: 'x-cache-status', source: 'Nginx cache', hit: v => /HIT/i.test(v), miss: v => /MISS|BYPASS|EXPIRED/i.test(v) },

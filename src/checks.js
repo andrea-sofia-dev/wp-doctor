@@ -21,13 +21,13 @@ export function serverResponse({ first, warm }) {
   };
 }
 
-export function pageCache({ first, warm, cookie, utm }) {
+export function pageCache({ first, warm, cookie, utm, consent = { name: null } }) {
   const w = cacheVerdict(warm);
   const c = cacheVerdict(cookie);
   const u = cacheVerdict(utm);
   const details = [
     `repeat visit: ${label(w.hit)} (${ms(warm.ttfbMs)})${w.evidence.length ? ' — ' + w.evidence.join(', ') : ''}`,
-    `visitor with a cookie: ${label(c.hit)} (${ms(cookie.ttfbMs)})`,
+    `${consent.name ? `visitor who accepted the ${consent.name} banner` : 'visitor with a cookie'}: ${label(c.hit)} (${ms(cookie.ttfbMs)})`,
     `visit with UTM parameters: ${label(u.hit)} (${ms(utm.ttfbMs)})`,
   ];
   const sources = [...new Set([...w.sources, ...cacheVerdict(first).sources])];
@@ -46,13 +46,17 @@ export function pageCache({ first, warm, cookie, utm }) {
           ? 'No cache headers, but repeat visits are fast: a cache may be in place without announcing itself.'
           : 'No sign of a page cache, and the page is not fast.',
       details,
-      fix: 'Turn on a page cache (WP Super Cache, W3 Total Cache, LiteSpeed Cache, or a CDN rule that caches HTML).',
+      fix: w.hit === null && fast
+        ? undefined
+        : 'Turn on a page cache (WP Super Cache, W3 Total Cache, LiteSpeed Cache, or a CDN rule that caches HTML).',
     };
   }
 
   const problems = [];
   if (c.hit === false || (c.hit === null && cookie.ttfbMs > warm.ttfbMs * 3 + 200)) {
-    problems.push('Visitors with any cookie skip the cache. With a consent banner that is almost everyone.');
+    problems.push(consent.name
+      ? `Visitors who accepted the ${consent.name} banner skip the cache: after the first page, that is almost everyone.`
+      : 'Visitors with any cookie skip the cache. With a consent banner that is almost everyone.');
   }
   if (u.hit === false || (u.hit === null && utm.ttfbMs > warm.ttfbMs * 3 + 200)) {
     problems.push('Campaign parameters (utm_*) skip the cache, so ad and newsletter traffic gets the slow page.');
@@ -61,7 +65,7 @@ export function pageCache({ first, warm, cookie, utm }) {
     id: 'page-cache',
     title: 'Page cache',
     status: problems.length ? 'warn' : 'pass',
-    summary: problems.length ? problems.join(' ') : 'Repeat visits are served from cache, also with cookies and UTM parameters.',
+    summary: problems.length ? problems.join(' ') : `Repeat visits are served from cache, also ${consent.name ? `after accepting the ${consent.name} banner` : 'with cookies'} and with UTM parameters.`,
     details,
     fix: problems.length
       ? 'Skip the cache only for logged-in users (WP Super Cache: "known users" is too broad), and tell the cache to ignore utm_*, fbclid, gclid and similar parameters.'
@@ -170,7 +174,103 @@ export function plugins({ warm }) {
   };
 }
 
-export const ALL_CHECKS = [serverResponse, pageCache, compression, viewportPosition, lcpHint, renderBlocking, recaptcha, plugins];
+export function mobileCache({ warm, mobileWarm }) {
+  if (!mobileWarm) return { id: 'mobile-cache', title: 'Cache on phones', status: 'info', summary: 'Could not test a visit from a phone.', details: [] };
+  const d = cacheVerdict(warm);
+  const m = cacheVerdict(mobileWarm);
+  const vary = (mobileWarm.headers.vary || warm.headers.vary || '').toLowerCase();
+  const details = [
+    `computer, repeat visit: ${label(d.hit)} (${ms(warm.ttfbMs)})`,
+    `phone, repeat visit: ${label(m.hit)} (${ms(mobileWarm.ttfbMs)})`,
+  ];
+  if (vary) details.push(`vary: ${vary}`);
+  const varyUa = /user-agent/.test(vary);
+  const slower = mobileWarm.ttfbMs > warm.ttfbMs * 3 + 200;
+
+  if ((d.hit === true && m.hit === false) || (m.hit === null && d.hit !== false && slower)) {
+    return {
+      id: 'mobile-cache', title: 'Cache on phones', status: 'warn',
+      summary: 'Phones skip the cache that computers get. On most sites phones are the majority of visits.',
+      details,
+      fix: 'Check that the cache (or the CDN rule) also stores the mobile version; with separate mobile caches, purge both when content changes.',
+    };
+  }
+  if (varyUa) {
+    return {
+      id: 'mobile-cache', title: 'Cache on phones', status: 'warn',
+      summary: 'The page sends "Vary: User-Agent": shared caches must keep a copy per browser version, so most visits miss.',
+      details,
+      fix: 'Remove User-Agent from Vary, or normalise it at the CDN into a few device classes (mobile, tablet, desktop).',
+    };
+  }
+  return {
+    id: 'mobile-cache', title: 'Cache on phones',
+    status: m.hit === true ? 'pass' : 'info',
+    summary: m.hit === true ? 'Phones get the cached page too.' : 'No cache signal on phones either way; response times are similar to computers.',
+    details,
+  };
+}
+
+export function sitePages({ pages = [] }) {
+  if (pages.length === 0) {
+    return { id: 'site-pages', title: 'Other pages', status: 'info', summary: 'No sitemap found, so only the start page was checked.', details: [], fix: 'Pass a specific page URL to check it, or enable the WordPress sitemap.' };
+  }
+  const rows = pages.map(p => ({ path: short(p.url), v: cacheVerdict(p.warm), t: p.warm.ttfbMs }));
+  const slowest = Math.max(...rows.map(r => r.t));
+  const misses = rows.filter(r => r.v.hit === false);
+  const status = slowest > 1800 ? 'fail' : slowest > 800 || misses.length ? 'warn' : 'pass';
+  return {
+    id: 'site-pages',
+    title: 'Other pages',
+    status,
+    summary: status === 'pass'
+      ? `${pages.length} pages from the sitemap are fast on a repeat visit (slowest ${ms(slowest)}).`
+      : `${misses.length} of ${pages.length} pages from the sitemap miss the cache; the slowest takes ${ms(slowest)} on a repeat visit.`,
+    details: rows.map(r => `${r.path}: ${label(r.v.hit)} (${ms(r.t)})`),
+    fix: status === 'pass' ? undefined : 'Look for cache exclusions that are too broad (whole post types, pages with a form or a shortcode) and for pages that are slow to generate.',
+  };
+}
+
+export function notFound({ notFound: nf, notFoundWarm }) {
+  if (!nf) return { id: 'not-found', title: 'Missing pages (404)', status: 'info', summary: 'Could not test a missing page.', details: [] };
+  const requested = short(nf.requestedUrl || '');
+  const landed = short(nf.url);
+  if (nf.status === 200) {
+    const redirected = Boolean(nf.requestedUrl) && landed !== requested;
+    return {
+      id: 'not-found', title: 'Missing pages (404)', status: 'fail',
+      summary: redirected
+        ? `Missing pages redirect to ${landed} with status 200 ("soft 404"): search engines and caches treat them as real pages.`
+        : 'Missing pages answer with status 200 ("soft 404"): search engines index them and caches store them as real pages.',
+      details: [`requested ${requested || 'a random URL'} → ${nf.status}${redirected ? ` at ${landed}` : ''}`],
+      fix: 'Make missing pages return 404 (a redirect plugin or a theme template may be catching them).',
+    };
+  }
+  if (nf.status !== 404 && nf.status !== 410) {
+    return { id: 'not-found', title: 'Missing pages (404)', status: 'info', summary: `A missing page answers with status ${nf.status}.`, details: [] };
+  }
+  const v = notFoundWarm ? cacheVerdict(notFoundWarm) : { hit: null };
+  const maxAge = cacheSeconds((notFoundWarm || nf).headers);
+  const longCache = v.hit === true && (maxAge === null || maxAge > 3600);
+  return {
+    id: 'not-found', title: 'Missing pages (404)',
+    status: longCache ? 'warn' : 'pass',
+    summary: longCache
+      ? `404 pages are cached${maxAge ? ` for ${Math.round(maxAge / 3600)} h` : ''}. A page published later at a URL someone already tried keeps showing "not found" until the cache is purged.`
+      : 'Missing pages return a real 404.',
+    details: [`status ${nf.status}, repeat request: ${label(v.hit)}${maxAge !== null ? `, cacheable for ${maxAge} s` : ''}`],
+    fix: longCache ? 'Cache 404s for minutes, not hours (or not at all), and purge the URL when a page is published.' : undefined,
+  };
+}
+
+// Seconds a shared cache may keep the response (s-maxage wins over max-age), or null if not stated.
+function cacheSeconds(headers = {}) {
+  const cc = headers['cache-control'] || '';
+  const m = cc.match(/s-maxage=(\d+)/i) || cc.match(/max-age=(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
+export const ALL_CHECKS = [serverResponse, pageCache, mobileCache, sitePages, notFound, compression, viewportPosition, lcpHint, renderBlocking, recaptcha, plugins];
 
 export function runChecks(data) {
   return ALL_CHECKS.map(check => check(data));

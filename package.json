@@ -1,6 +1,6 @@
 {
   "name": "wp-doctor",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Find out why a WordPress site is slow, from the outside, in seconds.",
   "type": "module",
   "bin": {

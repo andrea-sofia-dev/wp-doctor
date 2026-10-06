@@ -45,7 +45,11 @@ still slow. The full story is in [this case study](https://github.com/andrea-sof
 
 | Check | What it catches |
 | --- | --- |
-| Page cache for real visitors | A cache that works for a clean visit but is skipped by **visitors with a cookie** (consent banners set one on almost everyone) or by **visits with UTM parameters** (every ad and newsletter click) |
+| Page cache after the cookie banner | wp-doctor recognises the site's banner (iubenda, Cookiebot, Complianz, CookieYes, OneTrust, Borlabs, CookieLawInfo, Cookie Notice) and sends **the cookie a visitor has after accepting it**. Many caches skip exactly those visitors |
+| Page cache for ad and newsletter traffic | A cache that is skipped by **visits with UTM parameters**, so every campaign click gets the slow page |
+| Cache on phones | Phones that miss the cache computers get, and `Vary: User-Agent` splitting the cache into countless copies |
+| Other pages | A few pages from the sitemap, because the home page is often the only well-cached one |
+| Missing pages (404) | "Soft 404s" that answer 200, and 404s cached for hours that hide pages published later |
 | Which cache, and whether it hit | HIT or MISS, and which layer answered: Cloudflare, LiteSpeed, nginx, WP Super Cache, W3 Total Cache, WP Rocket |
 | Viewport tag position | A viewport tag printed after stylesheets or preloads, so phones briefly lay out the page at 980 px and may download desktop images |
 | Fixes for your stack | Through the MCP server, the exact setting to change in WP Super Cache, W3 Total Cache, LiteSpeed, Cloudflare, nginx or the theme |
@@ -67,17 +71,20 @@ and the `Age` header. When a site gives no signal, wp-doctor says so instead of 
 ## Usage
 
 ```
-npx github:andrea-sofia-dev/wp-doctor <url> [--json] [--html[=file]]
+npx github:andrea-sofia-dev/wp-doctor <url> [--json] [--html[=file]] [--pages=N]
 ```
 
+- `--pages=N` also checks N pages from the sitemap (default 3, `--pages=0` to skip).
 - `--json` prints machine-readable results, handy in CI.
 - `--html` also saves a self-contained HTML report (light and dark mode, no external files) to send to a client or attach to a ticket. `--html=report.html` picks the file name.
 - Exit code `0` if nothing failed, `1` if a check failed, `2` if the site could not be reached.
 
 Requires Node.js 20 or later. No dependencies.
 
-wp-doctor sends four ordinary GET requests (a first visit, a repeat visit, one with a cookie, one with UTM
-parameters) and identifies itself in the User-Agent. Only run it on sites you own or are allowed to test.
+wp-doctor sends ordinary GET requests, one after the other: the page twice, once with the banner's consent cookie,
+once with UTM parameters, twice as a phone, a missing page twice, robots.txt and the sitemap, and each sampled page
+twice (about 17 requests with the defaults). It identifies itself in the User-Agent. Only run it on sites you own or
+are allowed to test.
 
 ## Use it from Claude (MCP server)
 
@@ -107,7 +114,7 @@ Then ask, for example: *"Check example.com with wp-doctor and tell me how to fix
 
 | Tool | What it does |
 | --- | --- |
-| `check_site` | Runs every check on a URL and returns the report and the results as JSON |
+| `check_site` | Runs every check on a URL (optionally `pages`: how many sitemap pages to add) and returns the report and the results as JSON |
 | `list_checks` | Lists the checks and their ids |
 | `explain_check` | Why a check matters, how to verify it by hand, and the usual fixes per stack |
 
