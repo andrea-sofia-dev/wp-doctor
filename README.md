@@ -1,11 +1,14 @@
 # wp-doctor
 
-**Find out why a WordPress site is slow, from the outside, in seconds.** As a command-line tool, or as an MCP server
-that lets an AI agent run the checks and propose fixes.
+**PageSpeed tells you the server is slow. wp-doctor tells you why, and whether your real visitors get the cache.**
 
-`wp-doctor` checks any public WordPress site without logging in or installing anything on it. It looks for the
-problems that keep real sites slow even when "the cache is on": a cache that every visitor with a cookie skips, ad
-traffic that never hits the cache, a viewport tag that makes phones download desktop images, reCAPTCHA on every page.
+PageSpeed Insights tests a clean visit: no cookies, no campaign parameters. Real visitors are different. Most of them
+have accepted a cookie banner, and every ad or newsletter click carries `utm_*` parameters. On many WordPress sites
+those visitors skip the page cache and get the slow page, while PageSpeed shows you a fast one.
+
+wp-doctor checks a public WordPress site from the outside, the way those visitors reach it, in a few seconds and
+without installing anything on the site. Use it as a command-line tool, or as an MCP server that lets an AI agent
+run the checks and propose fixes for your stack.
 
 Example output:
 
@@ -33,17 +36,26 @@ i Plugin files: 14 plugins load 31 CSS/JS files on this page.
 3 passed · 4 warnings · 0 failed
 ```
 
-## Why these checks
+## What it checks
 
-They come from optimizing production WordPress portals, where the obvious fixes were already done and the site was
+It comes from optimizing production WordPress portals, where the obvious fixes were already done and the site was
 still slow. The full story is in [this case study](https://github.com/andrea-sofia-dev/wordpress-performance-case-study).
+
+**What PageSpeed won't tell you**
+
+| Check | What it catches |
+| --- | --- |
+| Page cache for real visitors | A cache that works for a clean visit but is skipped by **visitors with a cookie** (consent banners set one on almost everyone) or by **visits with UTM parameters** (every ad and newsletter click) |
+| Which cache, and whether it hit | HIT or MISS, and which layer answered: Cloudflare, LiteSpeed, nginx, WP Super Cache, W3 Total Cache, WP Rocket |
+| Viewport tag position | A viewport tag printed after stylesheets or preloads, so phones briefly lay out the page at 980 px and may download desktop images |
+| Fixes for your stack | Through the MCP server, the exact setting to change in WP Super Cache, W3 Total Cache, LiteSpeed, Cloudflare, nginx or the theme |
+
+**Also checked**, so you get the full picture in one command
 
 | Check | What it catches |
 | --- | --- |
 | Server response time | Time to the first byte on a repeat visit (good ≤ 0.8 s, poor > 1.8 s, as on web.dev) |
-| Page cache | No page cache, or a cache that skips **visitors with any cookie** (consent banners set one on almost everyone) or **visits with UTM parameters** (every ad and newsletter click) |
 | Compression | HTML sent without gzip or Brotli |
-| Viewport meta tag | A viewport tag printed after stylesheets or preloads, so phones briefly lay out the page at 980 px |
 | Main image priority | No preload and no `fetchpriority="high"` for the hero image |
 | Render-blocking files | Scripts in `<head>` without `defer` or `async` |
 | reCAPTCHA | reCAPTCHA loaded on pages with no form, or before anyone touches the form |
