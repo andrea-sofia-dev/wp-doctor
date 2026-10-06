@@ -1,10 +1,11 @@
 {
   "name": "wp-doctor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Find out why a WordPress site is slow, from the outside, in seconds.",
   "type": "module",
   "bin": {
-    "wp-doctor": "bin/wp-doctor.js"
+    "wp-doctor": "bin/wp-doctor.js",
+    "wp-doctor-mcp": "bin/wp-doctor-mcp.js"
   },
   "files": [
     "bin",
@@ -22,7 +23,11 @@
     "cache",
     "core-web-vitals",
     "cli",
-    "audit"
+    "audit",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "claude"
   ],
   "author": "Andrea Sofia (https://github.com/andrea-sofia-dev)",
   "license": "MIT",

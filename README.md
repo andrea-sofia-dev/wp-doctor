@@ -1,6 +1,7 @@
 # wp-doctor
 
-**Find out why a WordPress site is slow, from the outside, in seconds.**
+**Find out why a WordPress site is slow, from the outside, in seconds.** As a command-line tool, or as an MCP server
+that lets an AI agent run the checks and propose fixes.
 
 `wp-doctor` checks any public WordPress site without logging in or installing anything on it. It looks for the
 problems that keep real sites slow even when "the cache is on": a cache that every visitor with a cookie skips, ad
@@ -66,11 +67,45 @@ Requires Node.js 20 or later. No dependencies.
 wp-doctor sends four ordinary GET requests (a first visit, a repeat visit, one with a cookie, one with UTM
 parameters) and identifies itself in the User-Agent. Only run it on sites you own or are allowed to test.
 
+## Use it from Claude (MCP server)
+
+wp-doctor includes a [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI agent can audit a site
+and explain the fixes for your stack (WP Super Cache, W3 Total Cache, LiteSpeed, Cloudflare, nginx, theme code).
+
+**Claude Code**
+
+```
+claude mcp add wp-doctor -- npx -y -p github:andrea-sofia-dev/wp-doctor wp-doctor-mcp
+```
+
+**Claude Desktop** (or any MCP client): add this to the MCP servers configuration.
+
+```json
+{
+  "mcpServers": {
+    "wp-doctor": {
+      "command": "npx",
+      "args": ["-y", "-p", "github:andrea-sofia-dev/wp-doctor", "wp-doctor-mcp"]
+    }
+  }
+}
+```
+
+Then ask, for example: *"Check example.com with wp-doctor and tell me how to fix the cache on WP Super Cache."*
+
+| Tool | What it does |
+| --- | --- |
+| `check_site` | Runs every check on a URL and returns the report and the results as JSON |
+| `list_checks` | Lists the checks and their ids |
+| `explain_check` | Why a check matters, how to verify it by hand, and the usual fixes per stack |
+
+All tools are read-only: the server only sends GET requests to the URL you give it. It has no dependencies; it speaks
+JSON-RPC over stdio.
+
 ## Roadmap
 
 - Before/after cookie consent, in a real browser
 - Lighthouse on mobile with heavier CPU throttling (×12), closer to mid-range Android phones
-- MCP server, so an AI agent like Claude can run the checks and propose fixes
 
 ## How it's built
 
