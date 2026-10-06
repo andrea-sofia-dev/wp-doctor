@@ -2,6 +2,7 @@ import { timedFetch, withParams } from './http.js';
 import { consentCookie } from './consent.js';
 import { samplePages } from './sitemap.js';
 import { wordpressBase } from './wpbase.js';
+import { reachability } from './checks.js';
 
 export const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 wp-doctor';
@@ -19,6 +20,9 @@ export async function collect(url, { timeoutMs, pages = 3 } = {}) {
   const first = await timedFetch(url, opts);
   const target = first.url;
   const warm = await timedFetch(target, opts);
+
+  // A site that refuses the first two requests gets no more: the checks stop at "reachability".
+  if (reachability({ first, warm })) return { url: target, first, warm, blocked: true, pages: [] };
 
   const consent = consentCookie(first.body);
   const cookie = await timedFetch(target, { ...opts, headers: { cookie: consent.cookie } });

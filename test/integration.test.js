@@ -18,6 +18,7 @@ let server;
 let base;
 const seenCookies = [];
 let strictMode = false;
+let blockedHits = 0;
 
 before(async () => {
   server = http.createServer((req, res) => {
@@ -27,6 +28,11 @@ before(async () => {
     if (req.headers.cookie) seenCookies.push(req.headers.cookie);
     res.setHeader('content-type', 'text/html; charset=utf-8');
 
+    if (url.pathname === '/blocked') {
+      blockedHits++;
+      res.statusCode = 403;
+      return res.end('<title>ERROR: The request could not be satisfied</title>');
+    }
     if (url.pathname === '/robots.txt') {
       res.setHeader('content-type', 'text/plain');
       return res.end(`Sitemap: ${base}/wp-sitemap.xml\n`);
@@ -83,4 +89,11 @@ test('a cache that skips banner cookies, UTM visits and phones, with soft 404s, 
   assert.equal(results['mobile-cache'].status, 'warn');
   assert.equal(results['not-found'].status, 'fail');
   assert.equal(results['site-pages'].status, 'info');
+});
+
+test('a site that blocks the first requests gets no more requests', async () => {
+  const data = await collect(`${base}/blocked`, { pages: 3 });
+  assert.equal(data.blocked, true);
+  assert.equal(blockedHits, 2);
+  assert.equal(runChecks(data)[0].id, 'reachability');
 });

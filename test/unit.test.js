@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAttrs, extractHead, listTags, pluginAssets, isWordPress } from '../src/html.js';
 import { cacheVerdict } from '../src/cache.js';
-import { viewportPosition, renderBlocking, recaptcha, compression, lcpHint, notFound } from '../src/checks.js';
+import { viewportPosition, renderBlocking, recaptcha, compression, lcpHint, notFound, runChecks } from '../src/checks.js';
 import { consentCookie } from '../src/consent.js';
 import { wordpressBase } from '../src/wpbase.js';
 
@@ -90,6 +90,16 @@ test('wordpressBase finds a subfolder install from the REST API link', () => {
 test('iubenda embed widgets and autoblocking are recognised', () => {
   assert.equal(consentCookie('<script src="https://embeds.iubenda.com/widgets/9de7cf15-dcf3.js"></script>').name, 'iubenda');
   assert.match(consentCookie('<script src="https://cs.iubenda.com/autoblocking/2582173.js"></script>').cookie, /^_iub_cs-2582173=/);
+});
+
+test('a blocked site stops at reachability instead of analysing the error page', () => {
+  const err = { status: 403, headers: { 'x-cache': 'Error from cloudfront' }, body: '<title>ERROR</title>', ttfbMs: 80 };
+  const results = runChecks({ first: err, warm: err, pages: [] });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].id, 'reachability');
+  assert.match(results[0].summary, /blocks automated requests.*cloudfront/);
+  const challenge = { status: 200, headers: {}, body: '<html><head><title>Just a moment...</title></head></html>', ttfbMs: 80 };
+  assert.equal(runChecks({ first: challenge, warm: challenge, pages: [] })[0].id, 'reachability');
 });
 
 test('compression and image priority', () => {

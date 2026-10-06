@@ -49,7 +49,8 @@ try {
   const pages = pagesArg ? Math.max(0, Math.min(20, Number(pagesArg.slice(8)) || 0)) : 3;
   const data = await collect(url, { pages });
   const results = runChecks(data);
-  const isWp = isWordPress(data.warm.body, data.warm.headers);
+  // An error page says nothing about the platform: skip the "not WordPress" note when blocked.
+  const isWp = data.blocked || isWordPress(data.warm.body, data.warm.headers);
   const color = process.stdout.isTTY && !process.env.NO_COLOR;
   console.log(asJson ? jsonReport(data.url, results, { isWp }) : textReport(data.url, results, { color, isWp }));
 
@@ -59,6 +60,7 @@ try {
     // Keep stdout clean for --json: the report path goes to stderr.
     console.error(`HTML report saved to ${file}`);
   }
+  if (data.blocked) process.exit(2); // the site could not be checked
   process.exit(results.some(r => r.status === 'fail') ? 1 : 0);
 } catch (err) {
   console.error(`wp-doctor: could not check ${url}: ${err.cause?.code || err.message}`);

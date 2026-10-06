@@ -122,7 +122,7 @@ async function callTool(name, args, check) {
 
 async function defaultCheck(url, { pages = 3 } = {}) {
   const data = await collect(url, { pages });
-  return { finalUrl: data.url, results: runChecks(data), isWp: isWordPress(data.warm.body, data.warm.headers) };
+  return { finalUrl: data.url, results: runChecks(data), isWp: data.blocked || isWordPress(data.warm.body, data.warm.headers) };
 }
 
 const text = t => ({ content: [{ type: 'text', text: t }], isError: false });

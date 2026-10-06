@@ -294,7 +294,31 @@ function cacheSeconds(headers = {}) {
 
 export const ALL_CHECKS = [serverResponse, pageCache, mobileCache, sitePages, notFound, compression, viewportPosition, lcpHint, renderBlocking, recaptcha, plugins];
 
+// Pages that bot protection serves instead of the site, often with status 200.
+const CHALLENGE = /<title>\s*(Just a moment|Attention Required|Access denied|Request Rejected|Pardon Our Interruption|DDoS-Guard|Security check)/i;
+
+// If the site refused the request, the other checks would describe an error page, not the site.
+export function reachability({ first, warm }) {
+  const res = warm.status >= 400 ? warm : first;
+  const blockedPage = CHALLENGE.test(first.body) || CHALLENGE.test(warm.body);
+  if (res.status < 400 && !blockedPage) return null;
+  const via = res.headers['x-cache']?.match(/error from (\w+)/i)?.[1] || res.headers.server || res.headers['cf-ray'] && 'cloudflare';
+  const why = res.status === 403 || blockedPage
+    ? 'blocks automated requests'
+    : res.status === 429 ? 'is rate-limiting requests' : res.status >= 500 ? 'is returning a server error' : `answers ${res.status}`;
+  return {
+    id: 'reachability',
+    title: 'Site reachable',
+    status: 'fail',
+    summary: `The site ${why} (status ${res.status}${via ? `, ${via}` : ''}). wp-doctor received an error page instead of the site, so it did not run the other checks: their results would describe the error page.`,
+    details: [`first request: ${first.status}`, `repeat request: ${warm.status}`],
+    fix: 'Run wp-doctor on a site you manage. wp-doctor identifies itself as "wp-doctor" in the User-Agent: allow it in the firewall or bot protection while you test.',
+  };
+}
+
 export function runChecks(data) {
+  const blocked = reachability(data);
+  if (blocked) return [blocked];
   return ALL_CHECKS.map(check => check(data));
 }
 
