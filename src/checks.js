@@ -145,8 +145,18 @@ export function renderBlocking({ warm }) {
 }
 
 export function recaptcha({ warm }) {
-  const loads = /(google\.com|recaptcha\.net)\/recaptcha\/|gstatic\.com\/recaptcha\//i.test(warm.body);
-  if (!loads) return { id: 'recaptcha', title: 'reCAPTCHA', status: 'pass', summary: 'reCAPTCHA is not loaded on this page.', details: [] };
+  const RECAPTCHA = /(google\.com|recaptcha\.net)\/recaptcha\/|gstatic\.com\/recaptcha\//i;
+  // Only a <script src> loads it with the page; the same URL inside inline code means a loader
+  // that fetches it later (on the first touch of a form, for example), which is the good case.
+  const loads = listTags(warm.body, ['script']).some(t => RECAPTCHA.test(t.attrs.src || ''));
+  if (!loads) {
+    const onDemand = RECAPTCHA.test(warm.body) || /grecaptcha/.test(warm.body);
+    return {
+      id: 'recaptcha', title: 'reCAPTCHA', status: 'pass',
+      summary: onDemand ? 'reCAPTCHA is referenced but not loaded with the page: it is loaded on demand.' : 'reCAPTCHA is not loaded on this page.',
+      details: [],
+    };
+  }
   const hasForm = /<form\b/i.test(warm.body);
   return {
     id: 'recaptcha',
@@ -218,16 +228,28 @@ export function sitePages({ pages = [] }) {
   const rows = pages.map(p => ({ path: short(p.url), v: cacheVerdict(p.warm), t: p.warm.ttfbMs }));
   const slowest = Math.max(...rows.map(r => r.t));
   const misses = rows.filter(r => r.v.hit === false);
-  const status = slowest > 1800 ? 'fail' : slowest > 800 || misses.length ? 'warn' : 'pass';
+  // Slow and not served from cache is a real failure; slow on a cache hit is more often the
+  // server or the network at that moment, so it is a warning worth re-checking.
+  const slowUncached = rows.filter(r => r.v.hit !== true && r.t > 1800);
+  const slowHits = rows.filter(r => r.v.hit === true && r.t > 800);
+  const slow = rows.filter(r => r.t > 800);
+  const status = slowUncached.length ? 'fail' : misses.length || slow.length ? 'warn' : 'pass';
+
+  const parts = [];
+  if (misses.length) parts.push(`${misses.length} of ${pages.length} pages from the sitemap miss the cache.`);
+  if (slowUncached.length) parts.push(`${slowUncached.length} take more than 1.8 s on a repeat visit (slowest ${ms(slowest)}).`);
+  else if (slowHits.length) parts.push(`${slowHits.length} came from the cache but still took up to ${ms(slowest)}: the server or the network was slow at that moment. Re-run to confirm.`);
+  else if (slow.length) parts.push(`The slowest takes ${ms(slowest)} on a repeat visit.`);
+
   return {
     id: 'site-pages',
     title: 'Other pages',
     status,
-    summary: status === 'pass'
-      ? `${pages.length} pages from the sitemap are fast on a repeat visit (slowest ${ms(slowest)}).`
-      : `${misses.length} of ${pages.length} pages from the sitemap miss the cache; the slowest takes ${ms(slowest)} on a repeat visit.`,
+    summary: status === 'pass' ? `${pages.length} pages from the sitemap are fast on a repeat visit (slowest ${ms(slowest)}).` : parts.join(' '),
     details: rows.map(r => `${r.path}: ${label(r.v.hit)} (${ms(r.t)})`),
-    fix: status === 'pass' ? undefined : 'Look for cache exclusions that are too broad (whole post types, pages with a form or a shortcode) and for pages that are slow to generate.',
+    fix: misses.length || slowUncached.length
+      ? 'Look for cache exclusions that are too broad (whole post types, pages with a form or a shortcode) and for pages that are slow to generate.'
+      : slowHits.length ? 'If it happens again, the cache is served slowly: check server load, or serve the cache without PHP (WP Super Cache expert mode, or a CDN).' : undefined,
   };
 }
 

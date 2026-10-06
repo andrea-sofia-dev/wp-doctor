@@ -2,23 +2,33 @@ import { timedFetch } from './http.js';
 
 // Finds a few real pages to test besides the one given: robots.txt → sitemap index →
 // first child sitemap → URLs. Works with the WordPress core sitemap, Yoast and Rank Math.
-export async function samplePages(origin, limit, { timeoutMs } = {}) {
+// `base` is where WordPress lives (see wpbase.js): in a subfolder install, only sitemaps
+// and pages under that folder belong to the site being checked.
+export async function samplePages(base, limit, { timeoutMs } = {}) {
   if (limit <= 0) return [];
+  const basePath = new URL(base).pathname;
   const candidates = [];
   try {
-    const robots = await timedFetch(new URL('/robots.txt', origin).toString(), { timeoutMs });
+    // robots.txt only ever lives at the domain root.
+    const robots = await timedFetch(new URL('/robots.txt', base).toString(), { timeoutMs });
     if (robots.status === 200) {
       for (const m of robots.body.matchAll(/^\s*sitemap:\s*(\S+)/gim)) candidates.push(m[1]);
     }
   } catch { /* no robots.txt: fall back to the usual locations */ }
-  candidates.push(new URL('/wp-sitemap.xml', origin).toString(), new URL('/sitemap_index.xml', origin).toString(), new URL('/sitemap.xml', origin).toString());
+  candidates.push(...['wp-sitemap.xml', 'sitemap_index.xml', 'sitemap.xml'].map(f => new URL(f, base).toString()));
+  // Sitemaps of this WordPress first, anything else on the domain after.
+  const ordered = [...new Set(candidates)].sort((a, b) => underBase(b, base) - underBase(a, base));
 
-  for (const sitemapUrl of [...new Set(candidates)]) {
+  for (const sitemapUrl of ordered) {
     const urls = await readSitemap(sitemapUrl, { timeoutMs, depth: 0 });
-    const pages = urls.filter(u => sameSite(u, origin) && new URL(u).pathname !== new URL(origin).pathname);
+    const pages = urls.filter(u => sameSite(u, base) && underBase(u, base) && new URL(u).pathname !== basePath);
     if (pages.length) return spread(pages, limit);
   }
   return [];
+}
+
+function underBase(u, base) {
+  try { return new URL(u).pathname.startsWith(new URL(base).pathname) ? 1 : 0; } catch { return 0; }
 }
 
 async function readSitemap(url, { timeoutMs, depth }) {

@@ -10,10 +10,13 @@ import { listTags } from './html.js';
 const MANAGERS = [
   {
     name: 'iubenda',
-    src: /iubenda\.com\/(cs|cookie-solution|sync)\//i,
+    // Classic loader (cdn.iubenda.com/cs/...), autoblocking, and the newer embed widget (embeds.iubenda.com/widgets/<uuid>.js).
+    src: /iubenda\.com\/(cs|cookie-solution|sync|autoblocking|widgets)\//i,
     marker: /_iub\.csConfiguration|_iub\s*=\s*_iub/,
     cookie: html => {
-      const id = html.match(/["']?siteId["']?\s*[:=]\s*["']?(\d+)/i)?.[1] ?? '0';
+      const id = html.match(/["']?siteId["']?\s*[:=]\s*["']?(\d+)/i)?.[1]
+        ?? html.match(/iubenda\.com\/autoblocking\/(\d+)\.js/i)?.[1]
+        ?? '0';
       return `_iub_cs-${id}=${encodeURIComponent('{"timestamp":"2026-01-01T00:00:00.000Z","version":"1.0","purposes":{"1":true,"2":true,"3":true,"4":true,"5":true}}')}`;
     },
   },

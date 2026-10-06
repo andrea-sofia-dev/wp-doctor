@@ -1,6 +1,7 @@
 import { timedFetch, withParams } from './http.js';
 import { consentCookie } from './consent.js';
 import { samplePages } from './sitemap.js';
+import { wordpressBase } from './wpbase.js';
 
 export const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 wp-doctor';
@@ -29,12 +30,13 @@ export async function collect(url, { timeoutMs, pages = 3 } = {}) {
   const mobileFirst = await timedFetch(target, { ...opts, headers: mobileHeaders });
   const mobileWarm = await timedFetch(target, { ...opts, headers: mobileHeaders });
 
-  const missing = new URL(`/wp-doctor-missing-${campaign}/`, target).toString();
+  const base = wordpressBase(first.body, target);
+  const missing = new URL(`wp-doctor-missing-${campaign}/`, base).toString();
   const notFound = await safeFetch(missing, opts);
   const notFoundWarm = notFound ? await safeFetch(missing, opts) : null;
 
   const pageResults = [];
-  for (const pageUrl of await samplePages(target, pages, opts)) {
+  for (const pageUrl of await samplePages(base, pages, opts)) {
     const p1 = await safeFetch(pageUrl, opts);
     const p2 = p1 ? await safeFetch(pageUrl, opts) : null;
     if (p1 && p2) pageResults.push({ url: pageUrl, first: p1, warm: p2 });

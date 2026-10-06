@@ -4,6 +4,7 @@ import { parseAttrs, extractHead, listTags, pluginAssets, isWordPress } from '..
 import { cacheVerdict } from '../src/cache.js';
 import { viewportPosition, renderBlocking, recaptcha, compression, lcpHint, notFound } from '../src/checks.js';
 import { consentCookie } from '../src/consent.js';
+import { wordpressBase } from '../src/wpbase.js';
 
 const res = (body, headers = {}, ttfbMs = 100) => ({ body, headers, ttfbMs, totalMs: ttfbMs, status: 200 });
 
@@ -71,6 +72,24 @@ test('notFound flags soft 404s and long-cached 404s', () => {
   assert.equal(notFound({ notFound: nf(200), notFoundWarm: nf(200) }).status, 'fail');
   assert.equal(notFound({ notFound: nf(404), notFoundWarm: nf(404, { 'cf-cache-status': 'HIT', 'cache-control': 'max-age=86400' }) }).status, 'warn');
   assert.equal(notFound({ notFound: nf(404), notFoundWarm: nf(404, { 'cf-cache-status': 'HIT', 'cache-control': 'max-age=60' }) }).status, 'pass');
+});
+
+test('reCAPTCHA referenced only in inline code is loaded on demand', () => {
+  const inline = '<form></form><script>function load(){var s=document.createElement("script");s.src="https://www.google.com/recaptcha/api.js?render=x";}</script>';
+  const r = recaptcha({ warm: res(inline) });
+  assert.equal(r.status, 'pass');
+  assert.match(r.summary, /on demand/);
+});
+
+test('wordpressBase finds a subfolder install from the REST API link', () => {
+  const html = '<link rel="https://api.w.org/" href="https://www.example.com/info/wp-json/">';
+  assert.equal(wordpressBase(html, 'https://www.example.com/info/'), 'https://www.example.com/info/');
+  assert.equal(wordpressBase('<p></p>', 'https://www.example.com/a/b/'), 'https://www.example.com/');
+});
+
+test('iubenda embed widgets and autoblocking are recognised', () => {
+  assert.equal(consentCookie('<script src="https://embeds.iubenda.com/widgets/9de7cf15-dcf3.js"></script>').name, 'iubenda');
+  assert.match(consentCookie('<script src="https://cs.iubenda.com/autoblocking/2582173.js"></script>').cookie, /^_iub_cs-2582173=/);
 });
 
 test('compression and image priority', () => {
