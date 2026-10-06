@@ -54,10 +54,11 @@ and the `Age` header. When a site gives no signal, wp-doctor says so instead of 
 ## Usage
 
 ```
-npx github:andrea-sofia-dev/wp-doctor <url> [--json]
+npx github:andrea-sofia-dev/wp-doctor <url> [--json] [--html[=file]]
 ```
 
 - `--json` prints machine-readable results, handy in CI.
+- `--html` also saves a self-contained HTML report (light and dark mode, no external files) to send to a client or attach to a ticket. `--html=report.html` picks the file name.
 - Exit code `0` if nothing failed, `1` if a check failed, `2` if the site could not be reached.
 
 Requires Node.js 20 or later. No dependencies.
@@ -67,7 +68,6 @@ parameters) and identifies itself in the User-Agent. Only run it on sites you ow
 
 ## Roadmap
 
-- HTML report to share with clients or the team
 - Before/after cookie consent, in a real browser
 - Lighthouse on mobile with heavier CPU throttling (×12), closer to mid-range Android phones
 - MCP server, so an AI agent like Claude can run the checks and propose fixes

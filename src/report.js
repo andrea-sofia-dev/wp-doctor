@@ -14,10 +14,14 @@ export function textReport(url, results, { color = false, isWp = true } = {}) {
   }
 
   const count = s => results.filter(r => r.status === s).length;
-  lines.push('', `${count('pass')} passed · ${count('warn')} warnings · ${count('fail')} failed`);
+  lines.push('', `${count('pass')} passed · ${plural(count('warn'), 'warning')} · ${count('fail')} failed`);
   return lines.join('\n');
 }
 
 export function jsonReport(url, results, { isWp = true } = {}) {
   return JSON.stringify({ url, wordpress: isWp, checkedAt: new Date().toISOString(), results }, null, 2);
+}
+
+export function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
