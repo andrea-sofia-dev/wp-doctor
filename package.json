@@ -1,0 +1,33 @@
+{
+  "name": "wp-doctor",
+  "version": "0.1.0",
+  "description": "Find out why a WordPress site is slow, from the outside, in seconds.",
+  "type": "module",
+  "bin": {
+    "wp-doctor": "bin/wp-doctor.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "wordpress",
+    "performance",
+    "cache",
+    "core-web-vitals",
+    "cli",
+    "audit"
+  ],
+  "author": "Andrea Sofia (https://github.com/andrea-sofia-dev)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrea-sofia-dev/wp-doctor.git"
+  }
+}
