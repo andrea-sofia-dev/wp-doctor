@@ -73,34 +73,35 @@ export async function launchBrowser({ executablePath = findChrome(), args = [] }
   // The engine's own User-Agent, minus "Headless", plus who we are.
   const desktopUa = `${userAgent.replace('HeadlessChrome', 'Chrome')} ${SIGNATURE}`;
 
+  // One tab for every visit (serverless Chromium cannot open new ones), wiped before each visit:
+  // no cookies, no cache, so every visit reaches the site as a new visitor.
+  const { targetInfos } = await cdp.send('Target.getTargets');
+  const targetId = targetInfos.find((t) => t.type === 'page')?.targetId
+    ?? (await cdp.send('Target.createTarget', { url: 'about:blank' })).targetId;
+  const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
+  const page = (method, params) => cdp.send(method, params, sessionId);
+  await page('Network.enable');
+  await page('Network.setCacheDisabled', { cacheDisabled: true });
+  await page('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] });
+
   async function transport(url, { headers = {}, timeoutMs = 20000 } = {}) {
-    const { browserContextId } = await cdp.send('Target.createBrowserContext', { disposeOnDetach: true });
-    const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', browserContextId });
-    const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
-    const page = (method, params) => cdp.send(method, params, sessionId);
-    try {
-      const { 'user-agent': ua, cookie, accept, ...rest } = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
-      // A cookie header would be dropped after the first redirect: store the cookies for the whole domain instead,
-      // as a visitor who accepted the banner has them. (accept: the browser sends its own, as real visitors do.)
-      if (cookie) {
-        await page('Network.enable');
-        const domain = `.${new URL(url).hostname.replace(/^www\./, '')}`;
-        for (const pair of cookie.split(/;\s*/).filter(Boolean)) {
-          const at = pair.indexOf('=');
-          await page('Network.setCookie', { name: pair.slice(0, at), value: pair.slice(at + 1), domain, path: '/' });
-        }
+    await page('Network.clearBrowserCookies');
+    await page('Network.clearBrowserCache');
+    const { 'user-agent': ua, cookie, accept, ...rest } = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+    // A cookie header would be dropped after the first redirect: store the cookies for the whole domain instead,
+    // as a visitor who accepted the banner has them. (accept: the browser sends its own, as real visitors do.)
+    if (cookie) {
+      const domain = `.${new URL(url).hostname.replace(/^www\./, '')}`;
+      for (const pair of cookie.split(/;\s*/).filter(Boolean)) {
+        const at = pair.indexOf('=');
+        await page('Network.setCookie', { name: pair.slice(0, at), value: pair.slice(at + 1), domain, path: '/' });
       }
-      // A phone visit keeps the phone User-Agent, with the version of the engine that actually runs.
-      const userAgent = ua ? `${ua.replace(/Chrome\/[\d.]+/, `Chrome/${major}.0.0.0`).replace(/\s*wp-doctor\S*$/, '')} ${SIGNATURE}` : desktopUa;
-      await page('Network.enable');
-      await page('Network.setUserAgentOverride', { userAgent });
-      if (Object.keys(rest).length) await page('Network.setExtraHTTPHeaders', { headers: rest });
-      await page('Fetch.enable', { patterns: [{ urlPattern: '*', requestStage: 'Request' }] });
-      return await visit(cdp, sessionId, targetId, url, timeoutMs);
-    } finally {
-      await cdp.send('Target.closeTarget', { targetId }).catch(() => {});
-      await cdp.send('Target.disposeBrowserContext', { browserContextId }).catch(() => {});
     }
+    // A phone visit keeps the phone User-Agent, with the version of the engine that actually runs.
+    const userAgent = ua ? `${ua.replace(/Chrome\/[\d.]+/, `Chrome/${major}.0.0.0`).replace(/\s*wp-doctor\S*$/, '')} ${SIGNATURE}` : desktopUa;
+    await page('Network.setUserAgentOverride', { userAgent });
+    await page('Network.setExtraHTTPHeaders', { headers: rest });
+    return visit(cdp, sessionId, targetId, url, timeoutMs);
   }
 
   async function close() {
