@@ -8,7 +8,7 @@ those visitors skip the page cache and get the slow page, while PageSpeed shows 
 
 wp-doctor checks a public site from the outside, the way those visitors reach it, in a few seconds and without
 installing anything on the site. It works on any site; on WordPress it does more (plugin files, cache plugins,
-WordPress-specific fixes). Use it as a command-line tool, or as an MCP server that lets an AI agent
+WordPress-specific fixes). Try it in the browser at **[wp-doctor.vercel.app](https://wp-doctor.vercel.app)**, use it as a command-line tool, or as an MCP server that lets an AI agent
 run the checks and propose fixes for your stack.
 
 Example output:
@@ -127,7 +127,7 @@ JSON-RPC over stdio.
 
 ## Web version
 
-The same checks run in the browser: paste an address, follow the progress live, get a score, the results with the
+The same checks run in the browser at [wp-doctor.vercel.app](https://wp-doctor.vercel.app): paste an address, follow the progress live, get a score, the results with the
 background and fixes for each check, a link to share and the JSON.
 
 - `public/` is the page (no frameworks, no third-party scripts or fonts), `api/check.js` the Vercel function,
