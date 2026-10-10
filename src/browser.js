@@ -106,7 +106,17 @@ export async function launchBrowser({ executablePath = findChrome(), args = [] }
   async function close() {
     cdp.close();
     chrome.kill();
-    await new Promise((r) => (chrome.exitCode !== null ? r() : chrome.once('exit', r)));
+    // Wait for Chrome to exit, but not forever: on some servers it ignores SIGTERM.
+    await new Promise((r) => {
+      if (chrome.exitCode !== null || chrome.signalCode !== null) return r();
+      const force = setTimeout(() => chrome.kill('SIGKILL'), 2000);
+      const giveUp = setTimeout(r, 4000);
+      chrome.once('exit', () => {
+        clearTimeout(force);
+        clearTimeout(giveUp);
+        r();
+      });
+    });
     try {
       rmSync(profile, { recursive: true, force: true });
     } catch {
