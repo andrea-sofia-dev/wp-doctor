@@ -56,6 +56,7 @@ export async function handleCheck(request) {
         isWp,
         blocked: Boolean(data.blocked),
         mode: data.mode,
+        ...(data.browserUnavailable ? { browserUnavailable: data.browserUnavailable } : {}),
         version: pkg.version,
         checkedAt: new Date().toISOString(),
         // A blocked site was not measured: no score, rather than a 0 that reads as a verdict on the site.
