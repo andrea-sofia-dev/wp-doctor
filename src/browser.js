@@ -47,7 +47,9 @@ export async function launchBrowser({ executablePath = findChrome(), args = [] }
     ...(args.some((a) => a.startsWith('--headless')) ? [] : ['--headless=new']),
     '--remote-debugging-port=0', `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking',
-    '--disable-sync', '--disable-component-update', '--mute-audio', 'about:blank',
+    '--disable-sync', '--disable-component-update', '--mute-audio',
+    '--disable-dev-shm-usage', // serverless functions have no /dev/shm
+    'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
   const endpoint = await new Promise((resolve, reject) => {
