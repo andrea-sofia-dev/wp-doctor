@@ -33,6 +33,14 @@ test('score: passed checks count fully, warnings half, info not at all', () => {
   assert.equal(score([{ status: 'info' }]), null);
 });
 
+test('score: the cache checks weigh more, and an unverified page cache caps the score', () => {
+  // page-cache weighs 3: a warning there costs more than a warning on a minor check.
+  assert.equal(score([{ id: 'page-cache', status: 'warn' }, { id: 'viewport', status: 'pass' }]), 63);
+  assert.equal(score([{ id: 'page-cache', status: 'pass' }, { id: 'viewport', status: 'warn' }]), 88);
+  // Everything else passes, but nobody could tell whether pages come from a cache.
+  assert.equal(score([{ id: 'page-cache', status: 'info' }, { id: 'viewport', status: 'pass' }, { id: 'compression', status: 'pass' }]), 80);
+});
+
 test('with a guard set, every redirect is checked before it is followed', async (t) => {
   const server = createServer((req, res) => {
     if (req.url === '/start') res.writeHead(302, { location: '/private' }).end();

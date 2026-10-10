@@ -134,7 +134,7 @@ background and fixes for each check, a link to share and the JSON.
   `web/handler.js` the logic they share. The answer streams as newline-delimited JSON, one line per step.
 - Because the server sends the requests, it only checks public sites: no IP addresses or local names, nothing that
   resolves to a private network, standard ports only. The same rule applies to every redirect it follows.
-- Each check sends about twenty requests to the site, so there is a limit of 6 checks per 10 minutes per visitor,
+- Each check sends about twenty requests to the site, so there is a limit of 10 checks per 10 minutes per visitor,
   and a site checked again within 10 minutes gets the stored result. The terminal version has no limits.
 
 Run it locally with no extra dependencies:

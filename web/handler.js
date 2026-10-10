@@ -15,7 +15,7 @@ import pkg from '../package.json' with { type: 'json' };
 setUrlGuard(assertPublic);
 
 // Each analysis sends ~20 requests to the target: a public tool must not become a way to flood a site.
-const LIMIT = { perWindow: 6, windowMs: 10 * 60 * 1000 };
+const LIMIT = { perWindow: 10, windowMs: 10 * 60 * 1000 };
 const CACHE_MS = 10 * 60 * 1000; // the same site checked again within 10 minutes gets the stored result
 const recent = new Map(); // ip -> timestamps of recent analyses
 const results = new Map(); // normalised url -> { at, payload }
@@ -33,8 +33,10 @@ export async function handleCheck(request) {
   if (cached && Date.now() - cached.at < CACHE_MS) return stream(async (send) => send({ ...cached.payload, cached: true }));
 
   const ip = clientIp(request);
-  if (!allow(ip)) {
-    return json({ type: 'error', message: 'Too many checks from your connection: try again in a few minutes, or run wp-doctor in your terminal (no limits).' }, 429);
+  const waitMs = allow(ip);
+  if (waitMs) {
+    const minutes = Math.max(1, Math.ceil(waitMs / 60000));
+    return json({ type: 'error', message: `${LIMIT.perWindow} checks in 10 minutes is the limit for one connection: try again in ${minutes} minute${minutes > 1 ? 's' : ''}, or run wp-doctor in your terminal (no limits).` }, 429);
   }
 
   return stream(async (send) => {
@@ -50,6 +52,7 @@ export async function handleCheck(request) {
         version: pkg.version,
         checkedAt: new Date().toISOString(),
         score: score(checks),
+        cacheUnverified: cacheUnverified(checks),
         results: checks.map((r) => ({ ...r, explain: EXPLANATIONS[r.id] ?? null })),
       };
       if (!data.blocked) results.set(target, { at: Date.now(), payload });
@@ -129,26 +132,39 @@ function clientIp(request) {
   return (forwarded ? forwarded.split(',')[0] : request.headers.get('x-real-ip') || 'local').trim();
 }
 
+// 0 when the check can run, otherwise how long until the oldest check in the window expires.
 function allow(ip) {
   const now = Date.now();
   const times = (recent.get(ip) || []).filter((t) => now - t < LIMIT.windowMs);
-  if (times.length >= LIMIT.perWindow) return false;
+  if (times.length >= LIMIT.perWindow) return times[0] + LIMIT.windowMs - now;
   times.push(now);
   recent.set(ip, times);
   // Keep the maps small on a long-lived instance.
   if (recent.size > 5000) recent.clear();
   if (results.size > 500) results.clear();
-  return true;
+  return 0;
 }
 
 // ---------- answers ----------
 
 // 0-100: passed checks count fully, warnings half; "info" results don't count.
+// The cache checks weigh more: they are what wp-doctor is for, and what PageSpeed does not see.
+const WEIGHTS = { 'page-cache': 3, 'server-response': 2, 'mobile-cache': 2, 'site-pages': 2 };
+// When the page cache cannot be verified from outside, a perfect score would claim more than was checked.
+export const UNVERIFIED_CAP = 80;
+
 export function score(checks) {
   const counted = checks.filter((c) => c.status !== 'info');
   if (!counted.length) return null;
-  const points = counted.reduce((sum, c) => sum + (c.status === 'pass' ? 1 : c.status === 'warn' ? 0.5 : 0), 0);
-  return Math.round((points / counted.length) * 100);
+  const weight = (c) => WEIGHTS[c.id] ?? 1;
+  const total = counted.reduce((sum, c) => sum + weight(c), 0);
+  const points = counted.reduce((sum, c) => sum + weight(c) * (c.status === 'pass' ? 1 : c.status === 'warn' ? 0.5 : 0), 0);
+  const value = Math.round((points / total) * 100);
+  return cacheUnverified(checks) ? Math.min(value, UNVERIFIED_CAP) : value;
+}
+
+export function cacheUnverified(checks) {
+  return checks.some((c) => c.id === 'page-cache' && c.status === 'info');
 }
 
 function describe(error) {

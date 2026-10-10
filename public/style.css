@@ -419,6 +419,13 @@ button {
   color: var(--c);
 }
 
+.score-note {
+  max-width: 560px;
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

@@ -146,12 +146,15 @@ function showReport(report) {
       ? `${fails} problem${fails > 1 ? 's' : ''} to fix`
       : warns
         ? `Good, with ${warns} thing${warns > 1 ? 's' : ''} to improve`
-        : 'Everything checks out';
+        : report.cacheUnverified
+          ? 'No problems found, but the cache could not be verified'
+          : 'Everything checks out';
+  $('score-note').hidden = !report.cacheUnverified;
 
   const score = report.score ?? 0;
   const ring = document.querySelector('.ring');
   ring.style.strokeDashoffset = String(327 * (1 - score / 100));
-  $('score').dataset.level = score >= 85 ? 'good' : score >= 60 ? 'ok' : 'bad';
+  $('score').dataset.level = score >= 90 ? 'good' : score >= 60 ? 'ok' : 'bad';
   $('score-value').textContent = report.score === null ? '–' : String(score);
 
   $('counts').replaceChildren(
