@@ -5,7 +5,7 @@
 
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { collect } from '../src/collect.js';
+import { collectAuto } from '../src/collect.js';
 import { runChecks } from '../src/checks.js';
 import { EXPLANATIONS } from '../src/explain.js';
 import { isWordPress } from '../src/html.js';
@@ -41,7 +41,13 @@ export async function handleCheck(request) {
 
   return stream(async (send) => {
     try {
-      const data = await collect(target, { pages: 3, timeoutMs: 15000, onStep: (step) => send({ type: 'step', step }) });
+      const data = await collectAuto(target, {
+        pages: 3,
+        timeoutMs: 15000,
+        launch: launchOptions,
+        onStep: (step) => send({ type: 'step', step }),
+        onBrowser: () => send({ type: 'step', step: 'browser' }),
+      });
       const checks = runChecks(data);
       const isWp = data.blocked || isWordPress(data.warm.body, data.warm.headers);
       const payload = {
@@ -49,6 +55,7 @@ export async function handleCheck(request) {
         url: data.url,
         isWp,
         blocked: Boolean(data.blocked),
+        mode: data.mode,
         version: pkg.version,
         checkedAt: new Date().toISOString(),
         // A blocked site was not measured: no score, rather than a 0 that reads as a verdict on the site.
@@ -62,6 +69,13 @@ export async function handleCheck(request) {
       send({ type: 'error', message: describe(error) });
     }
   });
+}
+
+// On Vercel, a Chromium built for serverless functions; locally, the Chrome installed on the computer.
+async function launchOptions() {
+  if (!process.env.VERCEL) return {};
+  const { default: chromium } = await import('@sparticuz/chromium');
+  return { executablePath: await chromium.executablePath(), args: chromium.args };
 }
 
 // ---------- the address ----------

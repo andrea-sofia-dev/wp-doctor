@@ -1,10 +1,11 @@
 const SYMBOL = { pass: '✔', warn: '!', fail: '✖', info: 'i' };
 const COLOR = { pass: 32, warn: 33, fail: 31, info: 36 };
 
-export function textReport(url, results, { color = false, isWp = true } = {}) {
+export function textReport(url, results, { color = false, isWp = true, mode = 'plain' } = {}) {
   const paint = (status, s) => (color ? `\x1b[${COLOR[status]}m${s}\x1b[0m` : s);
   const dim = s => (color ? `\x1b[2m${s}\x1b[0m` : s);
   const lines = [`wp-doctor · ${url}`, ''];
+  if (mode === 'browser') lines.push(dim('Checked with a real browser: the site refuses plain requests.'), '');
   if (!isWp) lines.push(paint('info', 'Not a WordPress site: general checks only (the WordPress-specific ones are skipped).'), '');
 
   for (const r of results) {
@@ -18,8 +19,8 @@ export function textReport(url, results, { color = false, isWp = true } = {}) {
   return lines.join('\n');
 }
 
-export function jsonReport(url, results, { isWp = true } = {}) {
-  return JSON.stringify({ url, wordpress: isWp, checkedAt: new Date().toISOString(), results }, null, 2);
+export function jsonReport(url, results, { isWp = true, mode = 'plain' } = {}) {
+  return JSON.stringify({ url, wordpress: isWp, mode, checkedAt: new Date().toISOString(), results }, null, 2);
 }
 
 export function plural(n, word) {

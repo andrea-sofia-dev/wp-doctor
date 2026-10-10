@@ -1,7 +1,7 @@
 // Timed HTTP requests. Node's fetch resolves when the response headers arrive,
 // so the time to that point is a fair approximation of TTFB.
 
-export const USER_AGENT = 'wp-doctor/1.1 (+https://github.com/andrea-sofia-dev/wp-doctor)';
+export const USER_AGENT = 'wp-doctor/1.2 (+https://github.com/andrea-sofia-dev/wp-doctor)';
 
 // Optional check on every address before it is requested, redirects included. The CLI does not set one;
 // the web version does, so a public site cannot redirect the server to a private network address.
@@ -9,8 +9,13 @@ let guard = null;
 export function setUrlGuard(fn) {
   guard = fn;
 }
+export async function guardUrl(url) {
+  if (guard) await guard(url);
+}
 
-export async function timedFetch(url, { headers = {}, timeoutMs = 20000 } = {}) {
+// transport: another way to send the request (browser mode, src/browser.js), with the same answer.
+export async function timedFetch(url, { headers = {}, timeoutMs = 20000, transport } = {}) {
+  if (transport) return transport(url, { headers: { accept: 'text/html,*/*;q=0.8', ...headers }, timeoutMs });
   const start = performance.now();
   const init = {
     redirect: guard ? 'manual' : 'follow',

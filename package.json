@@ -1,6 +1,6 @@
 {
   "name": "wp-doctor",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "description": "Find out why a WordPress site is slow, from the outside, in seconds.",
   "type": "module",
   "bin": {
@@ -35,5 +35,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/andrea-sofia-dev/wp-doctor.git"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "153.0.0"
   }
 }

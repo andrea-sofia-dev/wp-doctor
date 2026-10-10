@@ -4,13 +4,13 @@ import { timedFetch } from './http.js';
 // first child sitemap → URLs. Works with the WordPress core sitemap, Yoast and Rank Math.
 // `base` is where WordPress lives (see wpbase.js): in a subfolder install, only sitemaps
 // and pages under that folder belong to the site being checked.
-export async function samplePages(base, limit, { timeoutMs } = {}) {
+export async function samplePages(base, limit, { timeoutMs, transport } = {}) {
   if (limit <= 0) return [];
   const basePath = new URL(base).pathname;
   const candidates = [];
   try {
     // robots.txt only ever lives at the domain root.
-    const robots = await timedFetch(new URL('/robots.txt', base).toString(), { timeoutMs });
+    const robots = await timedFetch(new URL('/robots.txt', base).toString(), { timeoutMs, transport });
     if (robots.status === 200) {
       for (const m of robots.body.matchAll(/^\s*sitemap:\s*(\S+)/gim)) candidates.push(m[1]);
     }
@@ -20,7 +20,7 @@ export async function samplePages(base, limit, { timeoutMs } = {}) {
   const ordered = [...new Set(candidates)].sort((a, b) => underBase(b, base) - underBase(a, base));
 
   for (const sitemapUrl of ordered) {
-    const urls = await readSitemap(sitemapUrl, { timeoutMs, depth: 0 });
+    const urls = await readSitemap(sitemapUrl, { timeoutMs, transport, depth: 0 });
     const pages = urls.filter(u => sameSite(u, base) && underBase(u, base) && new URL(u).pathname !== basePath);
     if (pages.length) return spread(pages, limit);
   }
@@ -31,10 +31,10 @@ function underBase(u, base) {
   try { return new URL(u).pathname.startsWith(new URL(base).pathname) ? 1 : 0; } catch { return 0; }
 }
 
-async function readSitemap(url, { timeoutMs, depth }) {
+async function readSitemap(url, { timeoutMs, transport, depth }) {
   let res;
   try {
-    res = await timedFetch(url, { timeoutMs, headers: { accept: 'application/xml,text/xml,*/*' } });
+    res = await timedFetch(url, { timeoutMs, transport, headers: { accept: 'application/xml,text/xml,*/*' } });
   } catch {
     return [];
   }
@@ -44,7 +44,7 @@ async function readSitemap(url, { timeoutMs, depth }) {
     // Prefer posts and pages over taxonomies and users.
     const children = locs.sort((a, b) => rank(a) - rank(b));
     for (const child of children.slice(0, 3)) {
-      const urls = await readSitemap(child, { timeoutMs, depth: depth + 1 });
+      const urls = await readSitemap(child, { timeoutMs, transport, depth: depth + 1 });
       if (urls.length) return urls;
     }
     return [];

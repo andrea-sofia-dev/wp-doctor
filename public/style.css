@@ -285,6 +285,16 @@ button {
   animation: spin 0.8s linear infinite;
 }
 
+.steps li.note {
+  margin-bottom: 6px;
+  color: var(--warn);
+}
+
+.steps li.note::before {
+  border-color: var(--warn);
+  background: var(--warn);
+}
+
 .steps li.is-done {
   color: var(--muted);
 }

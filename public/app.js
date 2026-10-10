@@ -15,7 +15,7 @@ const NOTES = {
   unverified:
     'The site does not say whether its pages come from a cache, so wp-doctor cannot confirm it from outside: the score stops at 80. Check the response headers on your server, or the "Page cache" card below.',
   blocked:
-    'Its bot protection answered instead of the site, so nothing was measured and there is no score: this says nothing about how fast the site is. wp-doctor does not pretend to be a browser to get past protections.',
+    'Its bot protection refused wp-doctor, even through a real browser (usually a CAPTCHA or an "are you human?" check), so nothing was measured and there is no score: this says nothing about how fast the site is. wp-doctor does not solve those checks.',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -93,16 +93,18 @@ async function run(value) {
 }
 
 function handle(message) {
-  if (message.type === 'step') markStep(message.step);
+  if (message.type === 'step' && message.step === 'browser') showSteps('The site refuses plain requests: checking again with a real browser');
+  else if (message.type === 'step') markStep(message.step);
   else if (message.type === 'error') fail(message.message);
   else if (message.type === 'result') showReport(message);
 }
 
 // ---------- progress ----------
 
-function showSteps() {
+function showSteps(note) {
   const list = $('steps');
   list.replaceChildren(
+    ...(note ? [el('li', { className: 'note' }, note)] : []),
     ...STEPS.map(([id, text]) => {
       const li = document.createElement('li');
       li.dataset.step = id;
@@ -116,6 +118,7 @@ function showSteps() {
 function markStep(id) {
   let reached = false;
   for (const li of $('steps').children) {
+    if (!li.dataset.step) continue;
     if (li.dataset.step === id) {
       li.className = 'is-active';
       reached = true;
@@ -139,6 +142,7 @@ function showReport(report) {
   const host = new URL(report.url).hostname;
   const notes = [host];
   if (!report.isWp) notes.push('does not look like WordPress: some checks may not apply');
+  if (report.mode === 'browser') notes.push('checked with a real browser (the site refuses plain requests)');
   if (report.cached) notes.push('checked in the last few minutes');
   $('site').textContent = notes.join(' · ');
   $('cli-url').textContent = report.url.replace(/^https:\/\//, '').replace(/\/$/, '');

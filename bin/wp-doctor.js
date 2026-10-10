@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { collect } from '../src/collect.js';
+import { collectAuto } from '../src/collect.js';
 import { runChecks } from '../src/checks.js';
 import { isWordPress } from '../src/html.js';
 import { textReport, jsonReport } from '../src/report.js';
 import { htmlReport, defaultReportName } from '../src/html-report.js';
 
-const HELP = `Usage: wp-doctor <url> [--json] [--html[=file]] [--pages=N]
+const HELP = `Usage: wp-doctor <url> [--json] [--html[=file]] [--pages=N] [--browser | --no-browser]
 
 Checks a WordPress site from the outside, the way real visitors reach it: page cache
 after accepting the cookie banner, with UTM parameters and on phones, other pages
@@ -19,6 +19,8 @@ Options:
   --html         also save a self-contained HTML report (wp-doctor-<site>-<date>.html)
   --html=file    save the HTML report with that name
   --pages=N      also check N pages from the sitemap (default 3, 0 to skip)
+  --browser      send every request through Chrome (Chrome, Chromium or Edge must be installed)
+  --no-browser   never use Chrome; by default it is used only when a site refuses plain requests
   --help         show this help
   --version      show the version
 
@@ -47,12 +49,18 @@ if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 try {
   const pagesArg = args.find(a => a.startsWith('--pages='));
   const pages = pagesArg ? Math.max(0, Math.min(20, Number(pagesArg.slice(8)) || 0)) : 3;
-  const data = await collect(url, { pages });
+  const browser = args.includes('--browser') ? 'always' : args.includes('--no-browser') ? 'never' : 'auto';
+  const data = await collectAuto(url, {
+    pages,
+    browser,
+    onBrowser: () => { if (!asJson) console.error('The site refuses plain requests: checking again with Chrome…'); },
+  });
   const results = runChecks(data);
   // An error page says nothing about the platform: skip the "not WordPress" note when blocked.
   const isWp = data.blocked || isWordPress(data.warm.body, data.warm.headers);
   const color = process.stdout.isTTY && !process.env.NO_COLOR;
-  console.log(asJson ? jsonReport(data.url, results, { isWp }) : textReport(data.url, results, { color, isWp }));
+  console.log(asJson ? jsonReport(data.url, results, { isWp, mode: data.mode }) : textReport(data.url, results, { color, isWp, mode: data.mode }));
+  if (data.browserUnavailable) console.error(`wp-doctor: could not retry with a browser: ${data.browserUnavailable}`);
 
   if (htmlArg) {
     const file = resolve(htmlArg.includes('=') ? htmlArg.slice('--html='.length) : defaultReportName(data.url));

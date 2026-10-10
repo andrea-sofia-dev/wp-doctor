@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
   "functions": {
-    "api/check.js": { "maxDuration": 60 }
+    "api/check.js": { "maxDuration": 60, "includeFiles": "node_modules/@sparticuz/chromium/**" }
   },
   "headers": [
     {

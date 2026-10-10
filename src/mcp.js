@@ -2,7 +2,7 @@
 // No SDK dependency; it implements the parts a tool server needs (initialize, ping,
 // tools/list, tools/call) and nothing else.
 
-import { collect } from './collect.js';
+import { collectAuto } from './collect.js';
 import { runChecks } from './checks.js';
 import { isWordPress } from './html.js';
 import { textReport } from './report.js';
@@ -121,7 +121,7 @@ async function callTool(name, args, check) {
 }
 
 async function defaultCheck(url, { pages = 3 } = {}) {
-  const data = await collect(url, { pages });
+  const data = await collectAuto(url, { pages });
   return { finalUrl: data.url, results: runChecks(data), isWp: data.blocked || isWordPress(data.warm.body, data.warm.headers) };
 }
 

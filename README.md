@@ -75,20 +75,35 @@ of analysing the error page.
 ## Usage
 
 ```
-npx github:andrea-sofia-dev/wp-doctor <url> [--json] [--html[=file]] [--pages=N]
+npx github:andrea-sofia-dev/wp-doctor <url> [--json] [--html[=file]] [--pages=N] [--browser | --no-browser]
 ```
 
 - `--pages=N` also checks N pages from the sitemap (default 3, `--pages=0` to skip).
 - `--json` prints machine-readable results, handy in CI.
 - `--html` also saves a self-contained HTML report (light and dark mode, no external files) to send to a client or attach to a ticket. `--html=report.html` picks the file name.
+- `--browser` sends every request through Chrome; `--no-browser` never uses it (see below).
 - Exit code `0` if nothing failed, `1` if a check failed, `2` if the site could not be reached.
 
-Requires Node.js 20 or later. No dependencies.
+Requires Node.js 20 or later (22 for browser mode). No dependencies.
 
 wp-doctor sends ordinary GET requests, one after the other: the page twice, once with the banner's consent cookie,
 once with UTM parameters, twice as a phone, a missing page twice, robots.txt and the sitemap, and each sampled page
 twice (about 17 requests with the defaults). It identifies itself in the User-Agent. Only run it on sites you own or
 are allowed to test.
+
+### Sites that refuse plain requests
+
+Some bot protections (Cloudflare bot management, Akamai, AWS WAF) refuse anything that is not a browser, whatever it
+is called: they look at how the connection is made. When that happens, wp-doctor runs the same checks again through a
+real Chrome (or Chromium, or Edge) installed on your computer:
+
+- each visit starts from a clean profile, like a new visitor, and loads only the HTML document: no images, scripts or
+  styles, so the site gets the same requests as in plain mode;
+- the User-Agent is Chrome's own, followed by `wp-doctor/1.2`: it still says who is asking;
+- the report says it was checked with a browser. Response times leave out the connection setup, so they compare
+  with plain mode (on sites that accept both, the verdicts are the same).
+
+It does not solve CAPTCHAs or "are you human?" challenges: a site that shows one stays "could not be checked".
 
 ## Use it from Claude (MCP server)
 
@@ -134,6 +149,9 @@ background and fixes for each check, a link to share and the JSON.
   `web/handler.js` the logic they share. The answer streams as newline-delimited JSON, one line per step.
 - Because the server sends the requests, it only checks public sites: no IP addresses or local names, nothing that
   resolves to a private network, standard ports only. The same rule applies to every redirect it follows.
+- Sites that refuse plain requests are checked again through Chromium
+  ([@sparticuz/chromium](https://github.com/Sparticuz/chromium), a development dependency used only by the Vercel
+  function: the command-line tool still installs nothing).
 - Each check sends about twenty requests to the site, so there is a limit of 10 checks per 10 minutes per visitor,
   and a site checked again within 10 minutes gets the stored result. The terminal version has no limits.
 
