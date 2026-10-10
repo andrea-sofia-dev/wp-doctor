@@ -15,7 +15,7 @@ const NOTES = {
   unverified:
     'The site does not say whether its pages come from a cache, so wp-doctor cannot confirm it from outside: the score stops at 80. Check the response headers on your server, or the "Page cache" card below.',
   blocked:
-    'Its bot protection refused wp-doctor, even through a real browser (usually a CAPTCHA or an "are you human?" check), so nothing was measured and there is no score: this says nothing about how fast the site is. wp-doctor does not solve those checks.',
+    'Its bot protection refused wp-doctor, even through a real browser: many sites turn away every visit that comes from a data center, like this server. Nothing was measured, so there is no score: this says nothing about how fast the site is. From your own computer it usually works: run the command below (it retries with your Chrome by itself).',
 };
 
 const $ = (id) => document.getElementById(id);
