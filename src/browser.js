@@ -61,7 +61,7 @@ export async function launchBrowser({ executablePath = findChrome(), args = [] }
         resolve(match[1]);
       }
     });
-    chrome.once('exit', () => reject(new Error('Chrome closed while starting.')));
+    chrome.once('exit', (code) => reject(new Error(`Chrome closed while starting (exit ${code}): ${log.trim().split('\n').slice(-3).join(' | ').slice(0, 400)}`)));
     chrome.once('error', reject);
   });
 
