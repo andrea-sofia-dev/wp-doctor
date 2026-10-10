@@ -11,6 +11,12 @@ const STEPS = [
 ];
 const LABEL = { pass: 'Passed', warn: 'Warning', fail: 'Failed', info: 'Info' };
 const ORDER = { fail: 0, warn: 1, info: 2, pass: 3 };
+const NOTES = {
+  unverified:
+    'The site does not say whether its pages come from a cache, so wp-doctor cannot confirm it from outside: the score stops at 80. Check the response headers on your server, or the "Page cache" card below.',
+  blocked:
+    'Its bot protection answered instead of the site, so nothing was measured and there is no score: this says nothing about how fast the site is. wp-doctor does not pretend to be a browser to get past protections.',
+};
 
 const $ = (id) => document.getElementById(id);
 const form = $('form');
@@ -135,7 +141,7 @@ function showReport(report) {
   if (!report.isWp) notes.push('does not look like WordPress: some checks may not apply');
   if (report.cached) notes.push('checked in the last few minutes');
   $('site').textContent = notes.join(' · ');
-  $('cli-url').textContent = host;
+  $('cli-url').textContent = report.url.replace(/^https:\/\//, '').replace(/\/$/, '');
 
   const count = (status) => report.results.filter((r) => r.status === status).length;
   const fails = count('fail');
@@ -149,17 +155,19 @@ function showReport(report) {
         : report.cacheUnverified
           ? 'No problems found, but the cache could not be verified'
           : 'Everything checks out';
-  $('score-note').hidden = !report.cacheUnverified;
+  const note = report.blocked ? NOTES.blocked : report.cacheUnverified ? NOTES.unverified : '';
+  $('score-note').textContent = note;
+  $('score-note').hidden = !note;
 
   const score = report.score ?? 0;
   const ring = document.querySelector('.ring');
   ring.style.strokeDashoffset = String(327 * (1 - score / 100));
-  $('score').dataset.level = score >= 90 ? 'good' : score >= 60 ? 'ok' : 'bad';
+  $('score').dataset.level = report.score === null ? 'none' : score >= 90 ? 'good' : score >= 60 ? 'ok' : 'bad';
   $('score-value').textContent = report.score === null ? '–' : String(score);
 
   $('counts').replaceChildren(
     ...['fail', 'warn', 'pass', 'info']
-      .filter((s) => count(s))
+      .filter((s) => count(s) && !report.blocked)
       .map((s) => el('li', { className: s }, `${count(s)} ${s === 'warn' ? `warning${count(s) > 1 ? 's' : ''}` : LABEL[s].toLowerCase()}`)),
   );
 

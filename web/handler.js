@@ -51,7 +51,8 @@ export async function handleCheck(request) {
         blocked: Boolean(data.blocked),
         version: pkg.version,
         checkedAt: new Date().toISOString(),
-        score: score(checks),
+        // A blocked site was not measured: no score, rather than a 0 that reads as a verdict on the site.
+        score: data.blocked ? null : score(checks),
         cacheUnverified: cacheUnverified(checks),
         results: checks.map((r) => ({ ...r, explain: EXPLANATIONS[r.id] ?? null })),
       };
