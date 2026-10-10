@@ -86,6 +86,9 @@ export async function collectAuto(url, { browser = 'auto', launch, onBrowser = (
   }
   try {
     return { ...(await collect(url, { ...options, transport: chrome.transport })), mode: 'browser' };
+  } catch (error) {
+    if (browser === 'always' || error.name === 'TimeoutError') throw error;
+    return { ...(await collect(url, { ...options, pages: 0 })), mode: 'plain', browserUnavailable: `browser mode failed: ${error.message}` };
   } finally {
     await chrome.close();
   }

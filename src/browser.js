@@ -205,7 +205,12 @@ function connect(endpoint) {
         send(method, params = {}, sessionId) {
           return new Promise((ok, fail) => {
             const msgId = ++id;
-            pending.set(msgId, { ok, fail });
+            // A command that never answers must not hang the whole check.
+            const timer = setTimeout(() => {
+              pending.delete(msgId);
+              fail(new Error(`Chrome did not answer ${method}`));
+            }, 15000);
+            pending.set(msgId, { ok: (v) => (clearTimeout(timer), ok(v)), fail: (e) => (clearTimeout(timer), fail(e)) });
             ws.send(JSON.stringify({ id: msgId, method, params, ...(sessionId ? { sessionId } : {}) }));
           });
         },
