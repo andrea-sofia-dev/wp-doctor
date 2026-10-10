@@ -16,8 +16,10 @@ export const MOBILE_UA =
 // - mobileFirst / mobileWarm: the same visit from a phone
 // - notFound / notFoundWarm: a page that cannot exist, twice
 // - pages: a few other pages from the sitemap, twice each
-export async function collect(url, { timeoutMs, pages = 3 } = {}) {
+// onStep(name) is called before each group of requests (the web version shows it as progress).
+export async function collect(url, { timeoutMs, pages = 3, onStep = () => {} } = {}) {
   const opts = { timeoutMs };
+  onStep('first');
   const first = await timedFetch(url, opts);
   const target = first.url;
   const warm = await timedFetch(target, opts);
@@ -25,21 +27,26 @@ export async function collect(url, { timeoutMs, pages = 3 } = {}) {
   // A site that refuses the first two requests gets no more: the checks stop at "reachability".
   if (reachability({ first, warm })) return { url: target, first, warm, blocked: true, pages: [] };
 
+  onStep('cookie');
   const consent = consentCookie(first.body);
   const cookie = await timedFetch(target, { ...opts, headers: { cookie: consent.cookie } });
 
+  onStep('utm');
   const campaign = `audit-${Date.now().toString(36)}`;
   const utm = await timedFetch(withParams(target, { utm_source: 'wp-doctor', utm_campaign: campaign }), opts);
 
+  onStep('mobile');
   const mobileHeaders = { 'user-agent': MOBILE_UA };
   const mobileFirst = await timedFetch(target, { ...opts, headers: mobileHeaders });
   const mobileWarm = await timedFetch(target, { ...opts, headers: mobileHeaders });
 
+  onStep('notFound');
   const base = wordpressBase(first.body, target);
   const missing = new URL(`wp-doctor-missing-${campaign}/`, base).toString();
   const notFound = await safeFetch(missing, opts);
   const notFoundWarm = notFound ? await safeFetch(missing, opts) : null;
 
+  onStep('pages');
   const pageResults = [];
   for (const pageUrl of await samplePages(base, pages, opts)) {
     const p1 = await safeFetch(pageUrl, opts);

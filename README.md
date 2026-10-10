@@ -125,6 +125,26 @@ Then ask, for example: *"Check example.com with wp-doctor and tell me how to fix
 All tools are read-only: the server only sends GET requests to the URL you give it. It has no dependencies; it speaks
 JSON-RPC over stdio.
 
+## Web version
+
+The same checks run in the browser: paste an address, follow the progress live, get a score, the results with the
+background and fixes for each check, a link to share and the JSON.
+
+- `public/` is the page (no frameworks, no third-party scripts or fonts), `api/check.js` the Vercel function,
+  `web/handler.js` the logic they share. The answer streams as newline-delimited JSON, one line per step.
+- Because the server sends the requests, it only checks public sites: no IP addresses or local names, nothing that
+  resolves to a private network, standard ports only. The same rule applies to every redirect it follows.
+- Each check sends about twenty requests to the site, so there is a limit of 6 checks per 10 minutes per visitor,
+  and a site checked again within 10 minutes gets the stored result. The terminal version has no limits.
+
+Run it locally with no extra dependencies:
+
+```
+npm run web
+```
+
+then open http://localhost:8787.
+
 ## Roadmap
 
 - Before/after cookie consent, in a real browser

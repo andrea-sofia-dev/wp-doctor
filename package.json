@@ -12,7 +12,8 @@
     "src"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "web": "node web/dev-server.js"
   },
   "engines": {
     "node": ">=20"

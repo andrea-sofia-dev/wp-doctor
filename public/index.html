@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>wp-doctor · why is this WordPress site slow?</title>
+    <meta
+      name="description"
+      content="Check any WordPress site from the outside in seconds: does the page cache work for real visitors (with a cookie, with utm_* parameters, on a phone)? What slows the page down, and how to fix it."
+    />
+    <meta name="theme-color" content="#05070c" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:title" content="wp-doctor · why is this WordPress site slow?" />
+    <meta
+      property="og:description"
+      content="PageSpeed tells you the server is slow. wp-doctor tells you why, and whether your real visitors get the cache."
+    />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">+</span> wp-doctor</a>
+      <nav>
+        <a href="https://github.com/andrea-sofia-dev/wp-doctor">GitHub</a>
+        <a href="https://andrea-sofia-dev.github.io/">by Andrea Sofia</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="intro">
+        <h1>Why is this WordPress site slow?</h1>
+        <p class="lead">
+          PageSpeed tells you the server is slow. <strong>wp-doctor tells you why</strong>, and whether your real
+          visitors get the cache: with the consent cookie, with <code>utm_*</code> parameters, on a phone.
+        </p>
+        <form id="form" class="form" autocomplete="off">
+          <label class="sr-only" for="url">Site address</label>
+          <input id="url" name="url" type="text" inputmode="url" placeholder="example.com" spellcheck="false" required />
+          <button id="go" type="submit">Check</button>
+        </form>
+        <p class="examples">
+          Try: <button type="button" data-example="wordpress.org/news">wordpress.org/news</button>
+          <button type="button" data-example="yoast.com">yoast.com</button>
+          <button type="button" data-example="wpengine.com">wpengine.com</button>
+        </p>
+      </section>
+
+      <section id="progress" class="progress" hidden aria-live="polite">
+        <h2 class="sr-only">Progress</h2>
+        <ol id="steps" class="steps"></ol>
+      </section>
+
+      <p id="error" class="error" role="alert" hidden></p>
+
+      <section id="report" class="report" hidden>
+        <div class="summary">
+          <div class="score" id="score">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-bg" cx="60" cy="60" r="52" />
+              <circle class="ring" cx="60" cy="60" r="52" />
+            </svg>
+            <span class="score-value"><b id="score-value">–</b><small>/100</small></span>
+          </div>
+          <div class="summary-text">
+            <p class="site" id="site"></p>
+            <h2 id="verdict"></h2>
+            <ul class="counts" id="counts"></ul>
+            <div class="actions">
+              <button type="button" id="share">Copy link</button>
+              <button type="button" id="download">Download JSON</button>
+            </div>
+          </div>
+        </div>
+        <div id="checks" class="checks"></div>
+        <aside class="cli">
+          <h3>Run it in your terminal, or let an AI agent run it</h3>
+          <pre><code>npx github:andrea-sofia-dev/wp-doctor <span id="cli-url">example.com</span></code></pre>
+          <p>
+            The same checks, plus an HTML report and an <strong>MCP server</strong>: Claude and other agents can run the
+            checks and propose fixes for your stack.
+            <a href="https://github.com/andrea-sofia-dev/wp-doctor#readme">How to set it up →</a>
+          </p>
+        </aside>
+      </section>
+
+      <section class="how">
+        <h2>What it checks</h2>
+        <ul>
+          <li><b>Page cache, the way real visitors arrive</b>: a repeat visit, a visit with the cookie of the site's own consent banner, a visit from an ad or newsletter link, a visit from a phone.</li>
+          <li><b>Other pages and missing pages</b>: a few pages from the sitemap, and whether 404s are cached for too long.</li>
+          <li><b>The page itself</b>: server response time, compression, viewport tag position, main image priority, render-blocking files, reCAPTCHA on pages without forms, plugin files.</li>
+        </ul>
+        <p class="note">
+          wp-doctor reads public pages like a visitor, identifies itself as <code>wp-doctor</code>, sends about twenty
+          requests one after the other, and keeps nothing: no accounts, no cookies, no trackers.
+        </p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>wp-doctor · open source, MIT</span>
+      <a href="https://github.com/andrea-sofia-dev/wp-doctor">Source code</a>
+      <a href="https://andrea-sofia-dev.github.io/">Andrea Sofia</a>
+    </footer>
+  </body>
+</html>
